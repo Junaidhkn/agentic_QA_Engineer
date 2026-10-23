@@ -35,6 +35,7 @@ SYSTEM_SESSION_ALLOWED = (
     "reliability.modules.audit",
     "reliability.modules.notifications",
     "reliability.cli",
+    "reliability.modules.telemetry",
 )
 
 

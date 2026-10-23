@@ -1,0 +1,65 @@
+# Internal OpenTelemetry Collector behind the OTLP gateway (ADR-0014).
+# The gateway authenticates every request and sets X-Scope-OrgID; the collector keeps that
+# header as client metadata, batches per tenant and forwards it to Mimir / Tempo / Loki.
+# Head sampling (10%) happens at the source via W3C traceparent flags.
+extensions:
+  health_check: {}
+  headers_setter:
+    headers:
+      - action: upsert
+        key: X-Scope-OrgID
+        from_context: X-Scope-OrgID
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+        include_metadata: true
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 20
+  batch:
+    send_batch_size: 2048
+    timeout: 2s
+    metadata_keys: [X-Scope-OrgID]
+    metadata_cardinality_limit: 5000
+  attributes/drop-high-cardinality:
+    actions:
+      - key: http.url
+        action: delete
+      - key: url.full
+        action: delete
+      - key: user.id
+        action: delete
+
+exporters:
+  prometheusremotewrite/mimir:
+    endpoint: ${env:MIMIR_URL}/api/v1/push
+    auth: { authenticator: headers_setter }
+    resource_to_telemetry_conversion: { enabled: true }
+  otlphttp/tempo:
+    endpoint: ${env:TEMPO_OTLP_URL}
+    auth: { authenticator: headers_setter }
+  otlphttp/loki:
+    endpoint: ${env:LOKI_URL}/otlp
+    auth: { authenticator: headers_setter }
+
+service:
+  extensions: [health_check, headers_setter]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/drop-high-cardinality, batch]
+      exporters: [otlphttp/tempo]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/drop-high-cardinality, batch]
+      exporters: [prometheusremotewrite/mimir]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlphttp/loki]

@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Header
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Header, Request
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from reliability.modules.artifacts import service as artifacts
-from reliability.modules.identity.deps import CtxDep
+from reliability.modules.identity.deps import CtxDep, get_principal
+from reliability.modules.identity.service import Principal
 from reliability.modules.projects import service as projects
 from reliability.modules.runs import service
 from reliability.modules.runs.models import RunMetricSummary
@@ -252,3 +254,88 @@ async def events_log(run_id: uuid.UUID, ctx: CtxDep, after: int = 0) -> list[dic
         {"seq": e.seq, "type": e.type, "payload": e.payload, "created_at": e.created_at.isoformat()}
         for e in await service.events_since(ctx.session, run_id, after)
     ]
+
+
+TERMINAL = {"passed", "failed", "invalid", "cancelled", "errored", "rejected"}
+
+
+@router.get("/runs/{run_id}/metrics")
+async def run_metrics(run_id: uuid.UUID, ctx: CtxDep, scope: str = "overall") -> dict[str, Any]:
+    """Chart series from the run's time-series artifact (5 s buckets)."""
+    import json as _json
+
+    from reliability.modules.runs.timeseries import TimeSeries
+
+    run = await _load(ctx, run_id)
+    art = next((a for a in await artifacts.for_run(ctx.session, run.id) if a.kind == "k6_timeseries"), None)
+    if art is None:
+        return {"scope": scope, "scopes": [], "points": [], "steady_state": None}
+    ts = TimeSeries(_json.loads(artifacts.read(art)))
+    return {
+        "scope": scope,
+        "scopes": ["overall", *ts.endpoint_scopes()],
+        "points": ts.series(scope),
+        "steady_state": (run.summary or {}).get("steady_state"),
+    }
+
+
+@router.get("/runs/{run_id}/events")
+async def stream_events(
+    run_id: uuid.UUID,
+    request: Request,
+    principal: Annotated[Principal, Depends(get_principal)],
+    last_event_id: Annotated[str | None, Header()] = None,
+) -> StreamingResponse:
+    """Server-Sent Events (ADR-0021): replay from Postgres after ``Last-Event-ID``, then live via Redis."""
+    import asyncio
+    import json as _json
+
+    from reliability.platform.db import tenant_tx
+    from reliability.platform.redis_client import get_redis
+
+    async with tenant_tx(user_id=principal.user_id, org_ids=principal.org_ids) as session:
+        run = await service.get(session, run_id)
+        require(principal, run.org_id, "viewer", scope="runs:read", project_id=run.project_id)
+        org_ids = principal.org_ids
+
+    def frame(seq: int, type_: str, payload: dict[str, Any]) -> str:
+        return f"id: {seq}\nevent: {type_}\ndata: {_json.dumps(payload, default=str)}\n\n"
+
+    async def generate() -> AsyncIterator[str]:
+        after = int(last_event_id) if last_event_id and last_event_id.isdigit() else 0
+        pubsub = get_redis().pubsub()
+        await pubsub.subscribe(f"run:{run_id}")
+        try:
+            async with tenant_tx(org_ids=org_ids) as session:
+                for e in await service.events_since(session, run_id, after):
+                    yield frame(e.seq, e.type, e.payload)
+                    after = e.seq
+                status = (await service.get(session, run_id)).status
+            if status in TERMINAL:
+                yield frame(after, "end", {"status": status})
+                return
+            idle = 0.0
+            while not await request.is_disconnected():
+                msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+                if msg is None:
+                    idle += 1.0
+                    if idle >= 15:
+                        idle = 0.0
+                        yield ": heartbeat\n\n"
+                    await asyncio.sleep(0)
+                    continue
+                data = _json.loads(msg["data"])
+                if data["seq"] <= after:
+                    continue
+                after = data["seq"]
+                yield frame(after, data["type"], data["payload"])
+                if data["type"] == "status" and data["payload"].get("status") in TERMINAL:
+                    yield frame(after, "end", {"status": data["payload"]["status"]})
+                    return
+        finally:
+            await pubsub.unsubscribe()
+            await pubsub.aclose()
+
+    return StreamingResponse(
+        generate(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    )

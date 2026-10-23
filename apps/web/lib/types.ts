@@ -23,3 +23,9 @@ export type RunSummaryRow = S["MetricSummaryOut"];
 export type RunArtifact = S["ArtifactOut"];
 export type Approval = S["ApprovalOut"];
 export type DownloadUrl = S["DownloadUrl"];
+export type Finding = S["FindingOut"];
+export type EvidenceItem = S["EvidenceOut"];
+export type IngestToken = S["IngestTokenOut"];
+export type IngestTokenCreated = S["IngestTokenCreated"];
+export interface SeriesPoint { t: number; vus: number; rps: number; error_rate: number; p50_ms: number | null; p95_ms: number | null; p99_ms: number | null }
+export interface RunMetrics { scope: string; scopes: string[]; points: SeriesPoint[]; steady_state: { window_s: [number, number] } | null }

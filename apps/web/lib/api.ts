@@ -31,6 +31,10 @@ export function setTokenGetter(getter: TokenGetter) {
   tokenGetter = getter;
 }
 
+export function currentToken(): Promise<string | null> {
+  return tokenGetter();
+}
+
 export function toApiError(status: number, body: unknown): ApiError {
   const env = body as Partial<ErrorEnvelope> | undefined;
   if (env?.error?.code) {

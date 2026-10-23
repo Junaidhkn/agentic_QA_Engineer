@@ -12,12 +12,23 @@ from sqlalchemy import delete
 from reliability.modules.artifacts import service as artifacts
 from reliability.modules.runs import analysis, service
 from reliability.modules.runs.models import RunMetricSummary
+from reliability.modules.runs.timeseries import TimeSeries, knee, steady_state
 from reliability.platform import outbox
 from reliability.platform.db import tenant_tx
 from reliability.platform.jobs import job
 
 log = logging.getLogger(__name__)
 POST_ANALYSIS_TOPICS: list[str] = []  # extended by later phases (e.g. findings.evaluate)
+
+
+def _stages(config: dict[str, Any]) -> list[dict[str, int]]:
+    """Recover stages from the compiled k6 options (first scenario) when the profile snapshot lacks them."""
+    scenarios = ((config.get("k6") or {}).get("options") or {}).get("scenarios") or {}
+    first: dict[str, Any] = next(iter(scenarios.values()), {})
+    out = []
+    for st in first.get("stages", []):
+        out.append({"duration_s": int(str(st["duration"]).rstrip("s")), "target": int(st["target"])})
+    return out
 
 
 def _num(v: float | None) -> Decimal | None:
@@ -94,6 +105,44 @@ async def analyze(payload: dict[str, Any]) -> None:
                         max_ms=_num(stats.max_ms),
                     )
                 )
+        ts_data = load_json("k6_timeseries:timeseries.json")
+        if ts_data and run.kind in ("load", "verification"):
+            ts = TimeSeries(ts_data)
+            stages = (run.config_snapshot.get("profile") or {}).get("stages") or _stages(run.config_snapshot)
+            window = steady_state(stages, ts.duration_s)
+            ss = ts.stats("overall", window)
+            verdict.summary["steady_state"] = {
+                "window_s": [window.start_s, window.end_s],
+                "requests": ss.requests,
+                "error_rate": round(ss.error_rate, 5),
+                "rps": round(ss.rps, 2),
+                "p50_ms": ss.p50_ms,
+                "p95_ms": ss.p95_ms,
+                "p99_ms": ss.p99_ms,
+            }
+            for scope in ["overall", *ts.endpoint_scopes()]:
+                st = ts.stats(scope, window)
+                session.add(
+                    RunMetricSummary(
+                        run_id=run.id,
+                        org_id=run.org_id,
+                        scope=scope,
+                        time_window="steady_state",
+                        requests=st.requests,
+                        rps=Decimal(str(round(st.rps, 3))),
+                        error_rate=Decimal(str(round(st.error_rate, 5))),
+                        p50_ms=_num(st.p50_ms),
+                        p90_ms=_num(st.p90_ms),
+                        p95_ms=_num(st.p95_ms),
+                        p99_ms=_num(st.p99_ms),
+                        max_ms=_num(st.max_ms),
+                    )
+                )
+            p95_threshold = float(
+                ((run.config_snapshot.get("profile") or {}).get("thresholds") or {}).get("p95_ms", 500)
+            )
+            if (run.config_snapshot.get("profile") or {}).get("type") in ("stress", "spike"):
+                verdict.summary["knee"] = knee(ts, stages, p95_threshold)
         run.summary = verdict.summary
         run.generator_health = verdict.summary.get("generator", run.generator_health)
         await service.transition(session, run, verdict.status, verdict.reason)

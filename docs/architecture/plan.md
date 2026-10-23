@@ -25,7 +25,7 @@ Rough sizing assumes 4 engineers; ranges are planning estimates, not commitments
 | 1 | Data layer, tenancy, platform core | 0 | 5 | ☑ |
 | 2 | Identity, orgs, projects, GitHub, targets, secrets | 1 | 6 | ☑ |
 | 3 | Execution plane and run pipeline (vertical slice) | 2 | 10 | ☑ |
-| 4 | Telemetry, detection, findings, live dashboard → **M1** | 3 | 6 | ☐ |
+| 4 | Telemetry, detection, findings, live dashboard → **M1** | 3 | 6 | ☑ |
 | 5 | LLM gateway, discovery, Workflow IR, test generation | 4 | 9 | ☐ |
 | 6 | Sandbox environments (build + app-under-test) | 3, 5 | 8 | ☐ |
 | 7 | Diagnosis → **M2** | 4, 6 | 8 | ☐ |
@@ -249,3 +249,6 @@ Rough sizing assumes 4 engineers; ranges are planning estimates, not commitments
 | 2026-10-23 | 3 | Runner identity = signed runner token (24 h) checked by the app in addition to PrivateLink/mTLS; lease secrets sealed with X25519 to a per-process runner key | Defense in depth; keys never leave the runner process |
 | 2026-10-23 | 3 | Download endpoints return `{url}` JSON instead of a 302 | Browser clients authenticate with bearer tokens, which redirects can't carry |
 | 2026-10-23 | 3 | Runner uploads per-run 5 s time-series with mergeable log-scale latency histograms and bounded request samples; raw k6 output only when < 64 MB compressed | Raw output of a 1,000-VU run is ~1 GB; histograms keep steady-state percentiles exact enough (±2.5%) |
+| 2026-10-23 | 4 | OTLP ingest is an authenticating gateway (`reliability.otlp_gateway`) in front of an internal OTel Collector that keeps `X-Scope-OrgID` as client metadata and batches per tenant; tail sampling replaced by 10% head sampling via traceparent flags | Tail sampling loses per-tenant client metadata in the collector; head sampling keeps tenancy simple and correct |
+| 2026-10-23 | 4 | Live view uses fetch-based SSE (Authorization header) instead of `EventSource` | `EventSource` cannot send bearer tokens; avoids tokens in URLs |
+| 2026-10-23 | 4 | Steady-state metrics, knee detection and charts are computed from the runner's time-series artifact; LGTM is used for server-side evidence (traces/logs/DB) | k6 metrics are complete without LGTM; keeps M1 independent of telemetry backends |

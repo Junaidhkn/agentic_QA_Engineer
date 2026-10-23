@@ -80,6 +80,15 @@ services:
     depends_on:
       migrate: { condition: service_completed_successfully }
 
+  otlp-gateway:
+    build: { context: ../../services/control-plane }
+    command: ["uvicorn", "reliability.otlp_gateway:app", "--host", "0.0.0.0", "--port", "4319"]
+    env_file: ../../.env
+    environment:
+      <<: *cp-env
+      RE_OTEL_COLLECTOR_URL: http://lgtm:4318
+    ports: ["4319:4319"]
+
   web:
     build: { context: ../.., dockerfile: apps/web/Dockerfile }
     environment:

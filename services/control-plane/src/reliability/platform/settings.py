@@ -83,7 +83,9 @@ class Settings(BaseSettings):
     mimir_url: str = "http://localhost:9009/prometheus"
     tempo_url: str = "http://localhost:3200"
     loki_url: str = "http://localhost:3100"
-    otlp_public_url: str = "http://localhost:4318"
+    otlp_public_url: str = "http://localhost:4319"
+    otel_collector_url: str = "http://localhost:4318"  # internal collector behind the OTLP gateway
+    telemetry_query_timeout_s: float = 15.0
 
     # Execution plane
     runner_lease_ttl_seconds: int = 15

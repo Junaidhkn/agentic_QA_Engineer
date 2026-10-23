@@ -6,12 +6,14 @@ import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { LiveRun } from "@/components/runs/LiveRun";
+import { RunCharts } from "@/components/runs/RunCharts";
 import { Badge, Button, Card, ErrorNote, fmtDate, StateView, Table } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
 import { openArtifact } from "@/lib/download";
 import { hasRole } from "@/lib/org";
 import { useProject } from "@/lib/project";
-import type { Run, RunArtifact, RunSummaryRow } from "@/lib/types";
+import type { Finding, Run, RunArtifact, RunMetrics, RunSummaryRow } from "@/lib/types";
+import Link from "next/link";
 
 const ACTIVE = new Set(["queued", "provisioning", "running", "cancelling", "analyzing", "pending_approval"]);
 const ms = (v?: number | null) => (v === null || v === undefined ? "—" : `${Math.round(v)} ms`);
@@ -27,6 +29,9 @@ export default function RunDetail() {
   });
   const finished = run.data && !ACTIVE.has(run.data.status);
   const summaries = useQuery({ queryKey: ["run-summaries", runId], queryFn: () => apiFetch<RunSummaryRow[]>(`/v1/runs/${runId}/summaries`), enabled: Boolean(finished) });
+  const [scope, setScope] = useState("overall");
+  const metrics = useQuery({ queryKey: ["run-metrics", runId, scope], queryFn: () => apiFetch<RunMetrics>(`/v1/runs/${runId}/metrics?scope=${encodeURIComponent(scope)}`), enabled: Boolean(finished) && run.data?.kind === "load" });
+  const findings = useQuery({ queryKey: ["run-findings", runId, run.data?.project_id], queryFn: () => apiFetch<Finding[]>(`/v1/projects/${run.data!.project_id}/findings`), enabled: Boolean(finished) });
   const artifacts = useQuery({ queryKey: ["run-artifacts", runId], queryFn: () => apiFetch<RunArtifact[]>(`/v1/runs/${runId}/artifacts`), enabled: Boolean(finished) });
   const [stopping, setStopping] = useState(false);
   const stop = useMutation({
@@ -52,13 +57,33 @@ export default function RunDetail() {
                 <Button variant="danger" onClick={() => setStopping(true)}>Stop</Button>
               )}
             </div>
-            {ACTIVE.has(r.status) && <LiveRun runId={r.id} active={r.status === "running" || r.status === "provisioning"} />}
+            {ACTIVE.has(r.status) && <LiveRun runId={r.id} p95Threshold={Number((r.profile?.thresholds as Record<string, number> | undefined)?.p95_ms) || undefined} onStatus={() => qc.invalidateQueries({ queryKey: ["run", runId] })} />}
             {finished && r.kind === "load" && (
               <div className="grid gap-4 sm:grid-cols-4">
                 {[["p50", ms(overall.p50_ms)], ["p95", ms(overall.p95_ms)], ["p99", ms(overall.p99_ms)], ["Failed requests", overall.error_rate !== undefined ? `${(overall.error_rate * 100).toFixed(2)}%` : "—"]].map(([k, v]) => (
                   <Card key={k}><p className="text-xs text-[var(--muted)]">{k}</p><p className="text-2xl font-semibold">{v}</p></Card>
                 ))}
               </div>
+            )}
+            {finished && r.kind === "load" && metrics.data && (
+              <div className="space-y-2">
+                <label className="text-sm">Scope{" "}
+                  <select className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-sm" value={scope} onChange={(e) => setScope(e.target.value)}>
+                    {metrics.data.scopes.map((sc) => <option key={sc} value={sc}>{sc === "overall" ? "All requests" : sc.replace("endpoint:", "")}</option>)}
+                  </select>
+                </label>
+                <RunCharts points={metrics.data.points} steadyWindow={metrics.data.steady_state?.window_s ?? null} p95Threshold={Number((r.profile?.thresholds as Record<string, number> | undefined)?.p95_ms) || undefined} />
+                {Boolean(s.knee) && <p className="text-sm"><strong>Measured capacity:</strong> latency broke down at about {String((s.knee as { vus: number }).vus)} virtual users ({String((s.knee as { reason: string }).reason)}).</p>}
+              </div>
+            )}
+            {finished && (findings.data ?? []).filter((f) => f.last_run_id === r.id).length > 0 && (
+              <Card title="Findings from this run">
+                <ul className="space-y-1 text-sm">
+                  {(findings.data ?? []).filter((f) => f.last_run_id === r.id).map((f) => (
+                    <li key={f.id}><Badge>{f.severity}</Badge> <Link className="text-[var(--accent)]" href={`/projects/${r.project_id}/findings/${f.id}`}>{f.title}</Link></li>
+                  ))}
+                </ul>
+              </Card>
             )}
             {r.generator_health && (r.generator_health as { valid?: boolean }).valid === false && (
               <p role="alert" className="rounded-md bg-amber-50 p-3 text-sm text-amber-900">The load generator was saturated, so these numbers describe our generator, not your app. Re-run with a larger generator.</p>

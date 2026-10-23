@@ -136,7 +136,11 @@ def runner_config(base: str, tmp_path: object) -> Config:
 
 
 async def _wait_status(
-    client: httpx.AsyncClient, run_id: str, headers: dict[str, str], statuses: set[str], timeout: float = 60  # noqa: ASYNC109
+    client: httpx.AsyncClient,
+    run_id: str,
+    headers: dict[str, str],
+    statuses: set[str],
+    timeout: float = 60,  # noqa: ASYNC109
 ) -> dict:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -246,6 +250,27 @@ async def test_load_run_end_to_end_with_approval_probe_and_cancel(live_api: str,
         await serve(cfg, asyncio.Event(), LeaseClient(cfg), max_jobs=1)
         probe_done = await _wait_status(client, probe.json()["id"], h, {"passed", "failed", "errored"})
         assert probe_done["status"] == "failed" and "invariant violated" in probe_done["status_reason"]
+        await drain_in_process()
+        findings = (await client.get(f"/v1/projects/{org.project_id}/findings?status=active", headers=h)).json()
+        assert isinstance(findings, list), findings
+        race = next(f for f in findings if f["type"] == "invariant_violation")
+        assert race["severity"] == "critical" and race["fingerprint"].startswith("invariant:checkout.place_order/")
+        detail = (await client.get(f"/v1/findings/{race['id']}", headers=h)).json()
+        assert detail["evidence"] and detail["evidence"][0]["kind"] == "experiment"
+
+        # The finished load run has steady-state summaries, chart series and a replayable SSE log.
+        metrics = (await client.get(f"/v1/runs/{run['id']}/metrics", headers=h)).json()
+        assert metrics["points"] and "endpoint:POST /api/orders" in metrics["scopes"]
+        async with client.stream("GET", f"/v1/runs/{run['id']}/events", headers={**h, "Last-Event-ID": "1"}) as resp:
+            body = ""
+            async for chunk in resp.aiter_text():
+                body += chunk
+                if "event: end" in body:
+                    break
+        assert "event: progress" in body and "id: 1\n" not in body and "event: end" in body
+        summary = (await client.get(f"/v1/projects/{org.project_id}/summary", headers=h)).json()
+        assert summary["latest_runs"]["load"]["status"] == "passed"
+        assert summary["open_findings"].get("critical") == 1
 
         # Stop halts traffic within 10 s (FR-18).
         long_profile = (

@@ -8,7 +8,7 @@ import { Badge, Button, Card, ErrorNote, Field, fmtDate, Input, Select, StateVie
 import { apiFetch } from "@/lib/api";
 import { hasRole } from "@/lib/org";
 import { useProject } from "@/lib/project";
-import type { Target } from "@/lib/types";
+import type { IngestTokenCreated, Target } from "@/lib/types";
 
 function VerificationHelp({ t }: { t: Target }) {
   const v = t.verification as { dns_txt: { name: string; value: string }; http_file: { url: string; content: string } };
@@ -73,10 +73,28 @@ export default function TargetsPage() {
           </form>
         </Card>
       )}
+      {admin && <div className="lg:col-span-3"><TelemetrySetup projectId={id} /></div>}
       <ConfirmDialog open={revoking !== null} title={`Revoke ${revoking?.host}?`} confirmLabel="Revoke" danger busy={revoke.isPending}
         onCancel={() => setRevoking(null)} onConfirm={() => revoking && revoke.mutate(revoking.id)}>
         <p>All runs against this host stop within seconds and no new runs can start until it is verified again.</p>
       </ConfirmDialog>
     </div>
+  );
+}
+
+function TelemetrySetup({ projectId }: { projectId: string }) {
+  const [created, setCreated] = useState<IngestTokenCreated | null>(null);
+  const create = useMutation({
+    mutationFn: () => apiFetch<IngestTokenCreated>(`/v1/projects/${projectId}/ingest-tokens`, { method: "POST", body: JSON.stringify({ name: "staging" }) }),
+    onSuccess: setCreated,
+  });
+  return (
+    <Card title="Server-side telemetry (optional)">
+      <p className="mb-2 text-sm text-[var(--muted)]">Diagnosis is much better when we can see traces and logs from your staging app. Point its OpenTelemetry exporter at us with an ingest token; data is stored per organization and kept 30 days.</p>
+      {created ? (
+        <pre className="overflow-auto rounded bg-black/5 p-2 text-xs">{Object.entries(created.env_example).map(([k, v]) => `${k}=${v}`).join("\n")}</pre>
+      ) : <Button variant="secondary" onClick={() => create.mutate()} disabled={create.isPending}>Create ingest token</Button>}
+      <ErrorNote error={create.error} />
+    </Card>
   );
 }

@@ -125,6 +125,8 @@ async def _config(session: AsyncSession, kind: str, suite_id: uuid.UUID, profile
                 "max_vus": profile.max_vus,
                 "duration_s": profile.duration_s,
                 "thresholds": profile.thresholds,
+                "stages": profile.stages,
+                "load_profile_id": str(profile.id),
             },
             "max_wall_s": _wall_clock(profile),
         }
