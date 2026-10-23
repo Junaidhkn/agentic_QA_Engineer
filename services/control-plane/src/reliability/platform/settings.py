@@ -64,7 +64,12 @@ class Settings(BaseSettings):
     github_app_slug: str | None = None
     github_private_key: SecretStr | None = None
     github_webhook_secret: SecretStr | None = None
+    github_client_id: str | None = None
+    github_client_secret: SecretStr | None = None
     github_api_url: str = "https://api.github.com"
+
+    # Targets: allow private/loopback hosts (local development only; rejected in staging/production)
+    allow_private_targets: bool = False
 
     # LLM gateway (ADR-0019)
     llm_provider: Literal["anthropic", "fake"] = "fake"
@@ -104,6 +109,8 @@ class Settings(BaseSettings):
                 insecure.append("RE_TOKEN_SIGNING_KEY must be set")
             if self.runner_signing_key.get_secret_value().startswith("dev-"):
                 insecure.append("RE_RUNNER_SIGNING_KEY must be set")
+            if self.allow_private_targets:
+                insecure.append("RE_ALLOW_PRIVATE_TARGETS must be false")
             if self.kms == "local":
                 insecure.append("RE_KMS must be aws")
             if self.llm_provider == "fake":

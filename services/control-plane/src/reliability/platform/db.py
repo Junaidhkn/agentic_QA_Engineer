@@ -31,6 +31,7 @@ SYSTEM_SESSION_ALLOWED = (
     "reliability.modules.retention",
     "reliability.modules.integrations.github",
     "reliability.modules.identity",
+    "reliability.modules.tenancy",
     "reliability.modules.audit",
     "reliability.modules.notifications",
 )

@@ -21,6 +21,11 @@ export class ApiError extends Error {
 
 type TokenGetter = () => Promise<string | null>;
 let tokenGetter: TokenGetter = async () => null;
+let orgGetter: () => string | null = () => null;
+
+export function setOrgGetter(getter: () => string | null) {
+  orgGetter = getter;
+}
 
 export function setTokenGetter(getter: TokenGetter) {
   tokenGetter = getter;
@@ -40,6 +45,8 @@ client.use({
   async onRequest({ request }) {
     const token = await tokenGetter();
     if (token) request.headers.set("Authorization", `Bearer ${token}`);
+    const org = orgGetter();
+    if (org && !request.headers.has("X-Org-Id")) request.headers.set("X-Org-Id", org);
     return request;
   },
 });
@@ -49,6 +56,8 @@ export async function apiFetch<T>(path: string, init: RequestInit & { idempotenc
   const headers = new Headers(init.headers);
   const token = await tokenGetter();
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  const org = orgGetter();
+  if (org && !headers.has("X-Org-Id")) headers.set("X-Org-Id", org);
   if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (init.idempotencyKey) headers.set("Idempotency-Key", init.idempotencyKey);
   const resp = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });

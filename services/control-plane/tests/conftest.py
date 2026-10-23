@@ -126,3 +126,29 @@ def org_a() -> OrgFixture:
 @pytest.fixture
 def org_b() -> OrgFixture:
     return make_org("bravo")
+
+
+@pytest.fixture
+async def api() -> AsyncIterator[object]:
+    import httpx
+
+    from reliability.main_api import create_app
+
+    transport = httpx.ASGITransport(app=create_app())
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        yield client
+
+
+def auth(email: str, org_id: uuid.UUID | None = None) -> dict[str, str]:
+    headers = {"Authorization": f"Bearer dev:{email}"}
+    if org_id:
+        headers["X-Org-Id"] = str(org_id)
+    return headers
+
+
+def add_member(org: OrgFixture, email: str, role: str) -> uuid.UUID:
+    user_id = uuid.uuid4()
+    with _superuser(TEST_DB) as conn:
+        conn.execute("INSERT INTO users (id, idp_subject, email) VALUES (%s,%s,%s)", (user_id, f"dev:{email}", email))
+        conn.execute("INSERT INTO memberships (org_id, user_id, role) VALUES (%s,%s,%s)", (org.org_id, user_id, role))
+    return user_id

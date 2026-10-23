@@ -23,7 +23,7 @@ Rough sizing assumes 4 engineers; ranges are planning estimates, not commitments
 |---|---|---|---|---|
 | 0 | Foundation and vendor choices | — | 4 | ☑ |
 | 1 | Data layer, tenancy, platform core | 0 | 5 | ☑ |
-| 2 | Identity, orgs, projects, GitHub, targets, secrets | 1 | 6 | ☐ |
+| 2 | Identity, orgs, projects, GitHub, targets, secrets | 1 | 6 | ☑ |
 | 3 | Execution plane and run pipeline (vertical slice) | 2 | 10 | ☐ |
 | 4 | Telemetry, detection, findings, live dashboard → **M1** | 3 | 6 | ☐ |
 | 5 | LLM gateway, discovery, Workflow IR, test generation | 4 | 9 | ☐ |
@@ -242,3 +242,5 @@ Rough sizing assumes 4 engineers; ranges are planning estimates, not commitments
 | 2026-10-23 | 1 | Cross-tenant jobs use a `re_system` role with BYPASSRLS, restricted to an allowlist of modules enforced by a test, instead of column-limited policies | Simpler, same blast-radius control; usage is test-enforced |
 | 2026-10-23 | 1 | Partitioned tables use a DEFAULT partition plus a daily job creating future monthly partitions (no pg_partman) | Works on any Postgres without extensions |
 | 2026-10-23 | 1 | Added tables: invitations, feature_flags, ingest_tokens, execution_jobs, reports, abuse_reviews, audit_anchors | Needed by API endpoints/jobs already in the design |
+| 2026-10-23 | 2 | GitHub install callback proves installer access via the App's OAuth user token (`RE_GITHUB_CLIENT_ID/SECRET`); without OAuth configured the callback is accepted only in local/test | Prevents linking someone else's installation by replaying an installation id |
+| 2026-10-23 | 2 | Added `RE_ALLOW_PRIVATE_TARGETS` (local only, rejected at startup in staging/production) | Lets developers test the platform against apps on 127.0.0.1 |

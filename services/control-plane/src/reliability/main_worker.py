@@ -40,6 +40,11 @@ celery_app.conf.update(
             "args": ["audit.anchor", {}],
             "schedule": crontab(minute=5, hour=0),
         },
+        "targets-reverify": {
+            "task": "reliability.run_job",
+            "args": ["targets.reverify_sweep", {}],
+            "schedule": crontab(minute=7),
+        },
         "partitions": {
             "task": "reliability.run_job",
             "args": ["maintenance.partitions", {}],
