@@ -7,6 +7,7 @@ Handlers receive ids only and must be idempotent.
 
 from __future__ import annotations
 
+import importlib
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -54,5 +55,6 @@ def all_jobs() -> dict[str, JobSpec]:
 
 
 def load_all_jobs() -> None:
-    """Import every module's ``jobs`` so their handlers register."""
-    from reliability import jobs_index  # noqa: F401
+    """Import every module's ``jobs`` so their handlers register (plugin-style, by name, so
+    ``platform`` keeps no static dependency on ``modules``)."""
+    importlib.import_module("reliability.jobs_index")
