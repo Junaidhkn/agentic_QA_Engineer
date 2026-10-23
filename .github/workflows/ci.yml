@@ -1,0 +1,104 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  control-plane:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16.6
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-retries 20
+      redis:
+        image: redis:7.4.1
+        ports: ["6379:6379"]
+    defaults:
+      run:
+        working-directory: services/control-plane
+    env:
+      RE_ENV: test
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with: { version: "0.5.11" }
+      - run: uv sync --frozen --extra dev
+      - name: Bootstrap database roles
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ../../scripts/db-bootstrap.sql
+      - run: uv run ruff check src tests
+      - run: uv run ruff format --check src tests
+      - run: uv run mypy src
+      - run: uv run lint-imports --config ../../.importlinter
+      - run: uv run pytest -q
+      - name: OpenAPI is up to date
+        run: |
+          uv run reliability export-openapi --out /tmp/openapi.json
+          diff -u ../../packages/api-client/openapi.json /tmp/openapi.json
+
+  runner-agent:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: services/runner-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with: { version: "0.5.11" }
+      - run: uv sync --frozen --extra dev
+      - run: uv run ruff check src tests
+      - run: uv run pytest -q
+
+  web:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: "10.12.1" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @re/web lint
+      - run: pnpm --filter @re/web typecheck
+      - run: pnpm --filter @re/web test
+      - run: pnpm --filter @re/web build
+
+  security:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+      - name: Dependency vulnerabilities
+        uses: google/osv-scanner-action/osv-scanner-action@v1.9.1
+        with:
+          scan-args: |-
+            --lockfile=services/control-plane/uv.lock
+            --lockfile=pnpm-lock.yaml
+
+  terraform:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: "1.9.8" }
+      - run: terraform fmt -check -recursive infra/terraform
+      - name: Validate modules
+        run: |
+          for d in infra/terraform/envs/*/; do
+            terraform -chdir="$d" init -backend=false -input=false && terraform -chdir="$d" validate
+          done

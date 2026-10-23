@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-10-23
 decision-makers: [user, claude]
 tags: [execution, verification, assumed]
