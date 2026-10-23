@@ -37,7 +37,11 @@ dev = [
   "mypy>=1.13",
   "import-linter>=2.1",
   "types-pyyaml",
+  "runner-agent",
 ]
+
+[tool.uv.sources]
+runner-agent = { path = "../runner-agent", editable = true }
 
 [project.scripts]
 reliability = "reliability.cli:main"

@@ -1,0 +1,40 @@
+[project]
+name = "runner-agent"
+version = "0.1.0"
+description = "Execution-plane runner: leases jobs, runs k6/Playwright in isolated sandboxes, enforces limits"
+requires-python = ">=3.12"
+dependencies = [
+  "httpx>=0.27",
+  "cryptography>=43",
+  "psutil>=6.1",
+  "pydantic-settings>=2.6",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3", "pytest-asyncio>=0.24", "respx>=0.21", "ruff>=0.8"]
+
+[project.scripts]
+runner-agent = "runner_agent.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/runner_agent"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "ASYNC"]
+ignore = ["S101", "S311", "S603", "S607", "S108", "ASYNC230", "ASYNC240"]  # small local workdir files
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S"]

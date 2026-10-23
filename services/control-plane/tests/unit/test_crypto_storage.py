@@ -46,3 +46,17 @@ def test_local_store_presign_verification(tmp_path) -> None:
     assert not store.verify("put", "org/x/file", int(time.time()) - 1, store.signature("put", "org/x/file", 0))
     with pytest.raises(ValueError):
         store.put_bytes("../../etc/passwd", b"x")
+
+
+def test_lease_secrets_seal_to_runner_key_only() -> None:
+    import json
+
+    from runner_agent.keys import RunnerKeys
+
+    from reliability.platform.crypto import seal_for_x25519
+
+    keys = RunnerKeys()
+    sealed = seal_for_x25519(keys.public_b64, json.dumps({"TOKEN": "s3cret"}).encode())
+    assert keys.unseal(sealed) == {"TOKEN": "s3cret"}
+    with pytest.raises(InvalidTag):
+        RunnerKeys().unseal(sealed)

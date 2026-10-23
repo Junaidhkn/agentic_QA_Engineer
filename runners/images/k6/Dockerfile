@@ -1,0 +1,4 @@
+FROM grafana/k6:0.54.0
+USER 10001
+WORKDIR /work
+ENTRYPOINT ["k6"]

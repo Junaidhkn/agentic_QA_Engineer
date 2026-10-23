@@ -31,10 +31,13 @@ jobs:
     env:
       RE_ENV: test
       PGPASSWORD: postgres
+      RE_TEST_PG_SUPERUSER_URL: postgresql://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
         with: { version: "0.5.11" }
+      - uses: grafana/setup-k6-action@v1
+        with: { k6-version: "0.54.0" }
       - run: uv sync --frozen --extra dev
       - name: Bootstrap database roles
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ../../scripts/db-bootstrap.sql
@@ -97,7 +100,7 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with: { terraform_version: "1.9.8" }
       - run: terraform fmt -check -recursive infra/terraform
-      - name: Validate modules
+      - name: Validate environments
         run: |
           for d in infra/terraform/envs/*/; do
             terraform -chdir="$d" init -backend=false -input=false && terraform -chdir="$d" validate

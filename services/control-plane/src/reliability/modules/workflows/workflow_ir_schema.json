@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reliability-engineer.dev/schemas/workflow-ir/1.0.json",
+  "title": "Workflow IR 1.0",
+  "description": "Reviewable, tool-agnostic description of one user workflow (ADR-0013). Playwright tests are compiled from `steps` (browser workflows); k6 scenarios from `api_equivalent` (or `steps` for api workflows).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ir_version", "key", "title", "kind", "criticality"],
+  "properties": {
+    "ir_version": { "const": "1.0" },
+    "key": { "type": "string", "pattern": "^[a-z0-9_.-]{3,120}$" },
+    "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "kind": { "enum": ["api", "browser"] },
+    "criticality": { "enum": ["critical", "high", "normal"] },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "enum": ["static", "openapi", "browser_exploration", "manual"] },
+        "evidence": { "type": "array", "items": { "type": "string", "maxLength": 300 }, "maxItems": 50 }
+      }
+    },
+    "preconditions": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type"],
+        "properties": {
+          "type": { "enum": ["login"] },
+          "credential_ref": { "type": "string", "pattern": "^secret:[A-Z][A-Z0-9_]{1,63}$" },
+          "username_ref": { "type": "string", "pattern": "^secret:[A-Z][A-Z0-9_]{1,63}$" },
+          "login_path": { "type": "string", "pattern": "^/" },
+          "api": { "$ref": "#/$defs/apiStep" }
+        }
+      }
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "vars": {
+          "type": "object",
+          "maxProperties": 30,
+          "propertyNames": { "pattern": "^[a-z_][a-z0-9_]{0,40}$" },
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "object", "additionalProperties": false, "required": ["faker"], "properties": { "faker": { "enum": ["internet.email", "person.name", "string.uuid", "lorem.word", "number.int"] } } },
+              { "type": "object", "additionalProperties": false, "required": ["range"], "properties": { "range": { "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 } } },
+              { "type": "object", "additionalProperties": false, "required": ["value"], "properties": { "value": { "type": ["string", "number", "boolean"] } } },
+              { "type": "object", "additionalProperties": false, "required": ["secret"], "properties": { "secret": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$" } } }
+            ]
+          }
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "maxItems": 60,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/browserStep" },
+          { "$ref": "#/$defs/apiStep" }
+        ]
+      }
+    },
+    "api_equivalent": { "type": "array", "maxItems": 30, "items": { "$ref": "#/$defs/apiStep" } },
+    "invariants": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "description", "parallel", "step_ref", "check"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9_-]{1,40}$" },
+          "type": { "const": "concurrency_probe" },
+          "description": { "type": "string", "maxLength": 300 },
+          "parallel": { "type": "integer", "minimum": 2, "maximum": 200 },
+          "step_ref": { "type": "string" },
+          "expect_successes": { "type": "object", "additionalProperties": false, "properties": { "max": { "type": "integer", "minimum": 0 }, "min": { "type": "integer", "minimum": 0 } } },
+          "check": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["request", "jsonpath", "op", "value"],
+            "properties": {
+              "request": { "$ref": "#/$defs/request" },
+              "jsonpath": { "type": "string", "pattern": "^\\$" },
+              "op": { "enum": ["==", "!=", ">=", "<=", ">", "<"] },
+              "value": { "type": ["number", "string", "boolean"] }
+            }
+          }
+        }
+      }
+    },
+    "side_effects": { "type": "array", "items": { "type": "string", "maxLength": 60 }, "maxItems": 10 },
+    "destructive": { "type": "boolean" },
+    "load": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "weight": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "think_time_s": { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 60 }, "minItems": 2, "maxItems": 2 }
+      }
+    }
+  },
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "path"],
+      "properties": {
+        "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"] },
+        "path": { "type": "string", "pattern": "^/", "maxLength": 500 },
+        "query": { "type": "object", "additionalProperties": { "type": ["string", "number", "boolean"] } },
+        "headers": { "type": "object", "additionalProperties": { "type": "string" }, "maxProperties": 20 },
+        "json": {},
+        "form": { "type": "object", "additionalProperties": { "type": ["string", "number", "boolean"] } }
+      }
+    },
+    "apiStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "request"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9_-]{1,40}$" },
+        "name": { "type": "string", "maxLength": 120 },
+        "request": { "$ref": "#/$defs/request" },
+        "extract": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^\\$" }, "maxProperties": 10 },
+        "expect": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": { "type": "array", "items": { "type": "integer", "minimum": 100, "maximum": 599 }, "minItems": 1 },
+            "body_contains": { "type": "string", "maxLength": 200 },
+            "json_schema_ref": { "type": "string" },
+            "max_duration_ms": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+    "locator": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "role": { "type": "string", "maxLength": 40 },
+        "name": { "type": "string", "maxLength": 200 },
+        "label": { "type": "string", "maxLength": 200 },
+        "text": { "type": "string", "maxLength": 200 },
+        "placeholder": { "type": "string", "maxLength": 200 },
+        "test_id": { "type": "string", "maxLength": 100 }
+      },
+      "minProperties": 1
+    },
+    "browserStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "action"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9_-]{1,40}$" },
+        "action": { "enum": ["navigate", "click", "fill", "select", "check", "press", "expect", "wait_for_url"] },
+        "url": { "type": "string", "pattern": "^/", "maxLength": 500 },
+        "locator": { "$ref": "#/$defs/locator" },
+        "value": { "type": "string", "maxLength": 500 },
+        "key": { "type": "string", "maxLength": 30 },
+        "assertion": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": { "enum": ["text_visible", "url_matches", "element_visible", "element_hidden", "title_contains"] },
+            "value": { "type": "string", "maxLength": 300 },
+            "locator": { "$ref": "#/$defs/locator" }
+          }
+        }
+      }
+    }
+  }
+}

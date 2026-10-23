@@ -34,6 +34,7 @@ SYSTEM_SESSION_ALLOWED = (
     "reliability.modules.tenancy",
     "reliability.modules.audit",
     "reliability.modules.notifications",
+    "reliability.cli",
 )
 
 

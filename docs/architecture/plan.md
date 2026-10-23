@@ -24,7 +24,7 @@ Rough sizing assumes 4 engineers; ranges are planning estimates, not commitments
 | 0 | Foundation and vendor choices | — | 4 | ☑ |
 | 1 | Data layer, tenancy, platform core | 0 | 5 | ☑ |
 | 2 | Identity, orgs, projects, GitHub, targets, secrets | 1 | 6 | ☑ |
-| 3 | Execution plane and run pipeline (vertical slice) | 2 | 10 | ☐ |
+| 3 | Execution plane and run pipeline (vertical slice) | 2 | 10 | ☑ |
 | 4 | Telemetry, detection, findings, live dashboard → **M1** | 3 | 6 | ☐ |
 | 5 | LLM gateway, discovery, Workflow IR, test generation | 4 | 9 | ☐ |
 | 6 | Sandbox environments (build + app-under-test) | 3, 5 | 8 | ☐ |
@@ -244,3 +244,8 @@ Rough sizing assumes 4 engineers; ranges are planning estimates, not commitments
 | 2026-10-23 | 1 | Added tables: invitations, feature_flags, ingest_tokens, execution_jobs, reports, abuse_reviews, audit_anchors | Needed by API endpoints/jobs already in the design |
 | 2026-10-23 | 2 | GitHub install callback proves installer access via the App's OAuth user token (`RE_GITHUB_CLIENT_ID/SECRET`); without OAuth configured the callback is accepted only in local/test | Prevents linking someone else's installation by replaying an installation id |
 | 2026-10-23 | 2 | Added `RE_ALLOW_PRIVATE_TARGETS` (local only, rejected at startup in staging/production) | Lets developers test the platform against apps on 127.0.0.1 |
+| 2026-10-23 | 3 | Test code is compiled **deterministically** from Workflow IR (generated files embed the IR as JSON and call a fixed k6/Playwright runtime); the LLM's role in test generation is to produce and repair IR, not to write code | Reproducible, injection-safe, reviewable; stays within ADR-0013's intent (IR is the contract) |
+| 2026-10-23 | 3 | Egress enforcement uses a per-run Smokescreen proxy container on an `--internal` Docker network plus NAT gateways with Elastic IPs, instead of a shared egress-proxy fleet | Per-run allowlists with no shared state; fewer moving parts; same guarantees |
+| 2026-10-23 | 3 | Runner identity = signed runner token (24 h) checked by the app in addition to PrivateLink/mTLS; lease secrets sealed with X25519 to a per-process runner key | Defense in depth; keys never leave the runner process |
+| 2026-10-23 | 3 | Download endpoints return `{url}` JSON instead of a 302 | Browser clients authenticate with bearer tokens, which redirects can't carry |
+| 2026-10-23 | 3 | Runner uploads per-run 5 s time-series with mergeable log-scale latency histograms and bounded request samples; raw k6 output only when < 64 MB compressed | Raw output of a 1,000-VU run is ~1 GB; histograms keep steady-state percentiles exact enough (±2.5%) |

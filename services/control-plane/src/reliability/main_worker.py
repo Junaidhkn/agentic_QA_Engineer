@@ -45,6 +45,7 @@ celery_app.conf.update(
             "args": ["targets.reverify_sweep", {}],
             "schedule": crontab(minute=7),
         },
+        "runners-reap": {"task": "reliability.run_job", "args": ["runners.reap", {}], "schedule": 10.0},
         "partitions": {
             "task": "reliability.run_job",
             "args": ["maintenance.partitions", {}],

@@ -1,0 +1,8 @@
+{
+  "name": "re-playwright-runtime",
+  "private": true,
+  "description": "Pinned Playwright used to execute generated browser tests",
+  "dependencies": {
+    "@playwright/test": "1.49.1"
+  }
+}

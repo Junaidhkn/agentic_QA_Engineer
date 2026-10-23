@@ -129,3 +129,25 @@ def verify_token(token: str, audience: str, key: str | None = None) -> dict[str,
     except jwt.PyJWTError as exc:
         raise AppError("UNAUTHENTICATED", "invalid or expired token") from exc
     return claims
+
+
+# ------------------------------------------------- sealing to a runner ----
+SEAL_INFO = b"reliability-lease-secrets-v1"
+
+
+def seal_for_x25519(recipient_public_b64: str, plaintext: bytes) -> str:
+    """ECIES-style sealing (X25519 + HKDF-SHA256 + AES-256-GCM) so lease secrets can only be
+    opened by the runner process holding the matching private key."""
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+    try:
+        peer = X25519PublicKey.from_public_bytes(base64.b64decode(recipient_public_b64))
+    except ValueError as exc:
+        raise AppError("VALIDATION_FAILED", "invalid runner public key") from exc
+    eph = X25519PrivateKey.generate()
+    eph_pub = eph.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+    key = HKDF(hashes.SHA256(), 32, salt=eph_pub, info=SEAL_INFO).derive(eph.exchange(peer))
+    nonce = os.urandom(12)
+    return base64.b64encode(eph_pub + nonce + AESGCM(key).encrypt(nonce, plaintext, None)).decode()
