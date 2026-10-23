@@ -11,6 +11,6 @@ if ! pg_isready -h localhost -p 5432 >/dev/null 2>&1; then
   fi
   su postgres -c "$PGBIN/pg_ctl -D $PGDATA -o '-p 5432 -k /tmp' -l $(dirname "$PGDATA")/log start"
 fi
-redis-cli ping >/dev/null 2>&1 || redis-server --daemonize yes --port 6379 >/dev/null
+redis-cli ping >/dev/null 2>&1 || redis-server --daemonize yes --port 6379 --save "" --appendonly no >/dev/null
 psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f "$(dirname "$0")/db-bootstrap.sql" >/dev/null
 echo "postgres + redis ready"

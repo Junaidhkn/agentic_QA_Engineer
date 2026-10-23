@@ -24,7 +24,7 @@ function genVar(spec: Dict): unknown {
   }
   const rnd = Math.random().toString(16).slice(2, 12);
   switch (spec.faker) {
-    case "internet.email": return `re-${rnd}@example.test`;
+    case "internet.email": return `re-${rnd}@example.com`;
     case "person.name": return `Test User ${rnd.slice(0, 4)}`;
     case "string.uuid": return crypto.randomUUID();
     case "number.int": return Math.floor(Math.random() * 100000);

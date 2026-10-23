@@ -37,3 +37,5 @@ build/
 
 # OS
 .DS_Store
+benchmarks/out/
+dump.rdb

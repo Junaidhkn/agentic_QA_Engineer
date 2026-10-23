@@ -7,7 +7,7 @@ import { LineChart } from "@/components/charts/LineChart";
 import { Badge, Card, StateView, TextLink } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
 import { useProject } from "@/lib/project";
-import type { Target } from "@/lib/types";
+import type { Coverage, Target } from "@/lib/types";
 
 interface Summary {
   latest_runs: Record<string, { id: string; status: string; steady_state?: { p95_ms?: number; error_rate?: number; rps?: number } | null }>;
@@ -22,6 +22,7 @@ export default function ProjectOverview() {
   const summary = useQuery({ queryKey: ["summary", id], queryFn: () => apiFetch<Summary>(`/v1/projects/${id}/summary`) });
   const trend = useQuery({ queryKey: ["trend", id], queryFn: () => apiFetch<TrendPoint[]>(`/v1/projects/${id}/trends?metric=p95_ms`) });
   const targets = useQuery({ queryKey: ["targets", id], queryFn: () => apiFetch<Target[]>(`/v1/projects/${id}/targets`) });
+  const coverage = useQuery({ queryKey: ["coverage", id], queryFn: () => apiFetch<Coverage>(`/v1/projects/${id}/coverage`) });
   const sev = ["critical", "high", "medium", "low"];
   return (
     <div className="space-y-6">
@@ -42,8 +43,14 @@ export default function ProjectOverview() {
               <p className="text-xs text-[var(--muted)]">{s.capacity ? s.capacity.reason : "run a stress profile to find the knee"}</p>
             </Card>
             <Card><p className="text-xs text-[var(--muted)]">Workflow coverage</p>
-              <p className="text-2xl font-semibold">{s.workflows.approved} approved</p>
-              <p className="text-xs text-[var(--muted)]">{s.workflows.discovered} discovered · coverage is what you approved, not the whole app</p>
+              {coverage.data ? (
+                <dl className="mt-1 grid grid-cols-4 gap-1 text-center">
+                  {(["discovered", "approved", "tested", "passing"] as const).map((k) => (
+                    <div key={k}><dd className="text-xl font-semibold">{coverage.data.totals[k]}</dd><dt className="text-[10px] text-[var(--muted)]">{k}</dt></div>
+                  ))}
+                </dl>
+              ) : <p className="text-2xl font-semibold">{s.workflows.approved} approved</p>}
+              <p className="mt-1 text-xs text-[var(--muted)]">Counts of workflows, not a percentage of the app. <TextLink href={`/projects/${id}/discovery`}>Discover more</TextLink></p>
             </Card>
           </div>
         )}

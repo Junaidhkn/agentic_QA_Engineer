@@ -31,6 +31,7 @@ from reliability.platform.db import system_tx
 from reliability.platform.errors import AppError
 from reliability.platform.flags import kill_switch_active
 from reliability.platform.ids import uuid7
+from reliability.platform.jobs import load_all_jobs
 from reliability.platform.settings import get_settings
 from reliability.platform.storage import get_store
 
@@ -140,11 +141,18 @@ async def _lease_run(session: AsyncSession, run: Run, runner: str, public_key: s
 
 
 async def _lease_job(session: AsyncSession, job: ExecutionJob, runner: str, public_key: str) -> dict[str, Any] | None:
+    load_all_jobs()  # job types register on import of their module's ``jobs``
     job_type = _JOB_TYPES.get(job.job_type)
     if job_type is None:
         return None
     lease_id = uuid7()
-    spec = await job_type.build_spec(session, job, str(lease_id), runner, public_key)
+    try:
+        spec = await job_type.build_spec(session, job, str(lease_id), runner, public_key)
+    except AppError as exc:  # e.g. target no longer verified: fail the job instead of retrying forever
+        job.status, job.finished_at = "failed", datetime.now(UTC)
+        job.result = {"outcome": "error", "abort_reason": exc.message}
+        await job_type.on_complete(session, job, job.result)
+        return None
     spec.update(
         {
             "lease_id": str(lease_id),

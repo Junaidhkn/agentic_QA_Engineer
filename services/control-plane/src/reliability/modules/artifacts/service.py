@@ -107,6 +107,14 @@ async def register(
     return art
 
 
+async def replace(session: AsyncSession, art: Artifact, data: bytes, content_type: str) -> Artifact:
+    """Overwrite an artifact's object in place (e.g. a test bundle recompiled after repair)."""
+    get_store().put_bytes(art.storage_key, data, content_type)
+    art.size_bytes, art.sha256, art.content_type = len(data), hashlib.sha256(data).digest(), content_type
+    await session.flush()
+    return art
+
+
 async def get(session: AsyncSession, artifact_id: uuid.UUID) -> Artifact:
     art = await session.get(Artifact, artifact_id)
     if art is None or art.expires_at < datetime.now(UTC):

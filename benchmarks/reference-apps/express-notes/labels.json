@@ -1,0 +1,39 @@
+{
+  "app": "express-notes",
+  "framework": "express",
+  "routes": [
+    "GET /health",
+    "POST /api/auth/register",
+    "POST /api/auth/login",
+    "GET /api/notes",
+    "POST /api/notes",
+    "GET /api/notes/{id}",
+    "PUT /api/notes/{id}",
+    "DELETE /api/notes/{id}",
+    "POST /api/notes/{id}/share"
+  ],
+  "pages": [],
+  "critical_workflows": [
+    "auth"
+  ],
+  "defects": {
+    "slow_list": {
+      "finding": "slo_breach",
+      "files": [
+        "routes/notes.js"
+      ],
+      "mechanism": "per-note artificial delay"
+    }
+  },
+  "run": {
+    "cmd": [
+      "node",
+      "app.js"
+    ],
+    "env": {
+      "PORT": "{port}"
+    },
+    "health": "/health",
+    "requires": "node_modules"
+  }
+}

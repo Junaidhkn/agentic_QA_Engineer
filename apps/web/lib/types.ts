@@ -27,5 +27,15 @@ export type Finding = S["FindingOut"];
 export type EvidenceItem = S["EvidenceOut"];
 export type IngestToken = S["IngestTokenOut"];
 export type IngestTokenCreated = S["IngestTokenCreated"];
+export type Discovery = S["DiscoveryOut"];
+export type OpenApiSpec = S["OpenAPIOut"];
+export type SourceArchive = S["ArchiveOut"];
+export interface CoverageCounts { discovered?: number; approved?: number; tested?: number; passing?: number }
+export interface Coverage {
+  totals: Required<CoverageCounts>;
+  by_source: Record<string, CoverageCounts>;
+  by_criticality: Record<string, CoverageCounts>;
+  suite_version: number | null;
+}
 export interface SeriesPoint { t: number; vus: number; rps: number; error_rate: number; p50_ms: number | null; p95_ms: number | null; p99_ms: number | null }
 export interface RunMetrics { scope: string; scopes: string[]; points: SeriesPoint[]; steady_state: { window_s: [number, number] } | null }

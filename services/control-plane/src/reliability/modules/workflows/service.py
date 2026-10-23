@@ -110,6 +110,12 @@ async def upsert_candidate(
     return wf
 
 
+async def find_by_key(session: AsyncSession, project_id: uuid.UUID, key: str) -> Workflow | None:
+    return (
+        await session.execute(select(Workflow).where(Workflow.project_id == project_id, Workflow.key == key))
+    ).scalar_one_or_none()
+
+
 async def get(session: AsyncSession, workflow_id: uuid.UUID) -> Workflow:
     wf = await session.get(Workflow, workflow_id)
     if wf is None:

@@ -58,6 +58,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/discoveries/{discovery_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Discovery */
+        get: operations["get_discovery_v1_discoveries__discovery_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discoveries/{discovery_id}:cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Discovery */
+        post: operations["cancel_discovery_v1_discoveries__discovery_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/findings/{finding_id}": {
         parameters: {
             query?: never;
@@ -374,6 +408,41 @@ export interface paths {
         patch: operations["patch_project_v1_projects__project_id__patch"];
         trace?: never;
     };
+    "/v1/projects/{project_id}/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Coverage */
+        get: operations["coverage_v1_projects__project_id__coverage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{project_id}/discoveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Discoveries */
+        get: operations["list_discoveries_v1_projects__project_id__discoveries_get"];
+        put?: never;
+        /** Start Discovery */
+        post: operations["start_discovery_v1_projects__project_id__discoveries_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects/{project_id}/findings": {
         parameters: {
             query?: never;
@@ -438,6 +507,24 @@ export interface paths {
         put?: never;
         /** Create Profile */
         post: operations["create_profile_v1_projects__project_id__load_profiles_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{project_id}/openapi-specs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Openapi */
+        get: operations["list_openapi_v1_projects__project_id__openapi_specs_get"];
+        put?: never;
+        /** Register Openapi */
+        post: operations["register_openapi_v1_projects__project_id__openapi_specs_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -510,6 +597,26 @@ export interface paths {
         post?: never;
         /** Delete Secret */
         delete: operations["delete_secret_v1_projects__project_id__secrets__name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{project_id}/source-archives": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Archive
+         * @description Upload a .zip or .tar.gz of the source tree (request body) for discovery without GitHub.
+         */
+        post: operations["upload_archive_v1_projects__project_id__source_archives_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -989,6 +1096,14 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** ArchiveOut */
+        ArchiveOut: {
+            /**
+             * Archive Artifact Id
+             * Format: uuid
+             */
+            archive_artifact_id: string;
+        };
         /** ArtifactOut */
         ArtifactOut: {
             /**
@@ -1094,6 +1209,55 @@ export interface components {
             decision: "approved" | "rejected";
             /** Reason */
             reason?: string | null;
+        };
+        /** DiscoveryCreate */
+        DiscoveryCreate: {
+            /** Archive Artifact Id */
+            archive_artifact_id?: string | null;
+            /** Commit Ref */
+            commit_ref?: string | null;
+            /** Openapi Spec Ids */
+            openapi_spec_ids?: string[];
+        };
+        /** DiscoveryOut */
+        DiscoveryOut: {
+            /** Commit Sha */
+            commit_sha: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Error */
+            error: {
+                [key: string]: unknown;
+            } | null;
+            /** Finished At */
+            finished_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Options */
+            options: {
+                [key: string]: unknown;
+            };
+            /** Progress */
+            progress: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Stats */
+            stats: {
+                [key: string]: unknown;
+            } | null;
+            /** Status */
+            status: string;
         };
         /** DownloadUrl */
         DownloadUrl: {
@@ -1395,6 +1559,38 @@ export interface components {
             scope: string;
             /** Time Window */
             time_window: string;
+        };
+        /** OpenAPICreate */
+        OpenAPICreate: {
+            /** Document */
+            document: string;
+            /**
+             * Source
+             * @default upload
+             * @enum {string}
+             */
+            source: "upload" | "repo";
+            /** Source Ref */
+            source_ref?: string | null;
+        };
+        /** OpenAPIOut */
+        OpenAPIOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Operation Count */
+            operation_count: number;
+            /** Source */
+            source: string;
+            /** Source Ref */
+            source_ref: string | null;
         };
         /** OrgCreate */
         OrgCreate: {
@@ -1708,6 +1904,8 @@ export interface components {
         };
         /** SuiteCreate */
         SuiteCreate: {
+            /** Validate Target Id */
+            validate_target_id?: string | null;
             /** Workflow Ids */
             workflow_ids?: string[] | null;
         };
@@ -2009,6 +2207,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DownloadUrl"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_discovery_v1_discoveries__discovery_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                discovery_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_discovery_v1_discoveries__discovery_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                discovery_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryOut"];
                 };
             };
             /** @description Validation Error */
@@ -2973,6 +3237,112 @@ export interface operations {
             };
         };
     };
+    coverage_v1_projects__project_id__coverage_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_discoveries_v1_projects__project_id__discoveries_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_discovery_v1_projects__project_id__discoveries_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "idempotency-key"?: string | null;
+                authorization?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscoveryCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_findings_v1_projects__project_id__findings_get: {
         parameters: {
             query?: {
@@ -3168,6 +3538,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProfileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_openapi_v1_projects__project_id__openapi_specs_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenAPIOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    register_openapi_v1_projects__project_id__openapi_specs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenAPICreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenAPIOut"];
                 };
             };
             /** @description Validation Error */
@@ -3416,6 +3856,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_archive_v1_projects__project_id__source_archives_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchiveOut"];
+                };
             };
             /** @description Validation Error */
             422: {

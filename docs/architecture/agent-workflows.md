@@ -94,6 +94,10 @@ flowchart TD
 | `rank_criticality` | agent (tier S) + rules | IR → criticality | Rules: auth, payment, data-write → at least `high` |
 | `[[interrupt]]` | human | candidates → approvals | UI shows source + confidence; nothing is tested until approved |
 
+> **As built (Phase 5, see plan.md deviations):** the graph ends at `persist` (status
+> `awaiting_review`); review happens in the workflows UI. `explore_ui` arrives with browser
+> exploration in Phase 9. Every model step has a deterministic baseline it degrades to.
+
 Coverage accounting: `discovered` = candidates; `approved`; `tested` = approved with ≥ 1
 valid test case; `passing` = last run passed. Reported as numbers, never as a percentage of
 "the app".
@@ -122,6 +126,11 @@ flowchart TD
     I --> J
     J --> K[persist suite version]
 ```
+
+> **As built (Phase 5):** code is compiled deterministically from IR (fixed k6/Playwright
+> runtime); the model repairs the *IR* of a failing workflow from its dry-run output (≤ 3
+> attempts). `static_check` is not needed; `dry_run` + `flake_check` run as one runner job
+> (3 repeats) that the graph awaits with `interrupt()`.
 
 - `generate_code` receives the IR plus **templates** (fixture patterns, auth helper, k6
   scenario skeleton with `group()`/`check()` naming conventions and trace-context headers).

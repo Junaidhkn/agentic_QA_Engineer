@@ -1,0 +1,62 @@
+name: evals
+
+# Agent evaluation gate (evaluation.md §4): runs on changes to agents, the LLM gateway, test
+# compilation or the corpus. Deterministic baseline on every PR; the model step runs only
+# where the repository secret is available (never for forks).
+on:
+  pull_request:
+    paths:
+      - "services/control-plane/src/reliability/agents/**"
+      - "services/control-plane/src/reliability/llm/**"
+      - "services/control-plane/src/reliability/modules/testsuites/**"
+      - "services/control-plane/src/reliability/modules/workflows/**"
+      - "benchmarks/**"
+      - ".github/workflows/evals.yml"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evals:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: services/control-plane
+    env:
+      RE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with: { version: "0.5.11" }
+      - uses: grafana/setup-k6-action@v1
+        with: { k6-version: "0.54.0" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: uv sync --frozen --extra dev
+      - name: Install reference app dependencies
+        run: npm install --no-audit --no-fund
+        working-directory: benchmarks/reference-apps/express-notes
+      - name: Deterministic baseline
+        run: uv run python ../../benchmarks/harness/run_evals.py --out ../../benchmarks/out/baseline
+      - name: With model
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        env:
+          RE_ANTHROPIC_API_KEY: ${{ secrets.RE_ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$RE_ANTHROPIC_API_KEY" ]; then echo "no API key configured; skipping"; exit 0; fi
+          RE_LLM_PROVIDER=anthropic uv run python ../../benchmarks/harness/run_evals.py --llm --out ../../benchmarks/out/llm
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-report
+          path: benchmarks/out/
+      - name: Summary
+        if: always()
+        run: cat ../../benchmarks/out/*/summary.md >> "$GITHUB_STEP_SUMMARY" || true

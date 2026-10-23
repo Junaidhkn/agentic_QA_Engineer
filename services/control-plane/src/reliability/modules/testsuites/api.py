@@ -12,6 +12,7 @@ from reliability.modules.artifacts import service as artifacts
 from reliability.modules.artifacts.api import DownloadUrl
 from reliability.modules.identity.deps import CtxDep
 from reliability.modules.projects import service as projects
+from reliability.modules.quotas import ratelimit
 from reliability.modules.tenancy.policy import require
 from reliability.modules.testsuites import service
 from reliability.platform import idempotency
@@ -22,6 +23,8 @@ router = APIRouter(tags=["test-suites"])
 class SuiteCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     workflow_ids: list[uuid.UUID] | None = Field(default=None, max_length=500)
+    # Dry-run each generated test (3×) against this verified target and repair failures (FR-10, FR-12).
+    validate_target_id: uuid.UUID | None = None
 
 
 class CaseOut(BaseModel):
@@ -82,10 +85,15 @@ async def generate(
     payload = body.model_dump(mode="json")
     if cached := await idempotency.lookup(ctx.session, project.org_id, key, payload):
         return cached.to_response()
-    suite = await service.generate(ctx.session, ctx.principal, project, body.workflow_ids)
+    if body.validate_target_id:
+        await ratelimit.check(str(ctx.principal.user_id), "expensive")
+    suite = await service.generate(
+        ctx.session, ctx.principal, project, body.workflow_ids, validate_target_id=body.validate_target_id
+    )
     out = _out(suite, await _cases(ctx, suite.id))
-    await idempotency.store(ctx.session, project.org_id, key, payload, 201, out.model_dump(mode="json"))
-    return JSONResponse(out.model_dump(mode="json"), status_code=201)
+    code = 202 if body.validate_target_id else 201
+    await idempotency.store(ctx.session, project.org_id, key, payload, code, out.model_dump(mode="json"))
+    return JSONResponse(out.model_dump(mode="json"), status_code=code)
 
 
 @router.get("/projects/{project_id}/test-suites", response_model=list[SuiteOut])

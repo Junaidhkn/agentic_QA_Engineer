@@ -26,7 +26,7 @@ Rough sizing assumes 4 engineers; ranges are planning estimates, not commitments
 | 2 | Identity, orgs, projects, GitHub, targets, secrets | 1 | 6 | ☑ |
 | 3 | Execution plane and run pipeline (vertical slice) | 2 | 10 | ☑ |
 | 4 | Telemetry, detection, findings, live dashboard → **M1** | 3 | 6 | ☑ |
-| 5 | LLM gateway, discovery, Workflow IR, test generation | 4 | 9 | ☐ |
+| 5 | LLM gateway, discovery, Workflow IR, test generation | 4 | 9 | ☑ |
 | 6 | Sandbox environments (build + app-under-test) | 3, 5 | 8 | ☐ |
 | 7 | Diagnosis → **M2** | 4, 6 | 8 | ☐ |
 | 8 | Repair, verification gates, approvals, PRs | 6, 7 | 10 | ☐ |
@@ -252,3 +252,12 @@ Rough sizing assumes 4 engineers; ranges are planning estimates, not commitments
 | 2026-10-23 | 4 | OTLP ingest is an authenticating gateway (`reliability.otlp_gateway`) in front of an internal OTel Collector that keeps `X-Scope-OrgID` as client metadata and batches per tenant; tail sampling replaced by 10% head sampling via traceparent flags | Tail sampling loses per-tenant client metadata in the collector; head sampling keeps tenancy simple and correct |
 | 2026-10-23 | 4 | Live view uses fetch-based SSE (Authorization header) instead of `EventSource` | `EventSource` cannot send bearer tokens; avoids tokens in URLs |
 | 2026-10-23 | 4 | Steady-state metrics, knee detection and charts are computed from the runner's time-series artifact; LGTM is used for server-side evidence (traces/logs/DB) | k6 metrics are complete without LGTM; keeps M1 independent of telemetry backends |
+| 2026-10-23 | 5 | Discovery ends at `persist` with status `awaiting_review`; human review happens through the workflows API/UI instead of a graph `interrupt()` | Review is per-workflow and can take days; candidates are durable rows, so no thread needs to stay open |
+| 2026-10-23 | 5 | Route extraction uses Python `ast` (FastAPI) and structural pattern adapters (Express mounts/routers, Next.js App and Pages Router files) instead of tree-sitter | No native dependency; 100% route recall on the labelled corpus. Tree-sitter remains the upgrade path when the corpus shows misses |
+| 2026-10-23 | 5 | Test generation graph: deterministic compile → runner dry-run ×3 (`test_validation` job, graph waits via `interrupt`) → model repairs the **IR** (≤ 3 attempts, endpoints limited to known ones, destructive flag cannot be dropped); `static_check` (tsc/eslint/k6 inspect) dropped | Code comes from a fixed runtime, so static checks add nothing; dry runs catch real failures |
+| 2026-10-23 | 5 | Every LLM step has a deterministic baseline (resource journeys, auth journeys, page loads; criticality rules) and degrades to it on refusal, outage, opt-out or budget/quota exhaustion | Keeps discovery useful without a model and bounds the blast radius of model failures |
+| 2026-10-23 | 5 | Generated API workflows that need auth prepend sign-up + log-in steps when no `TEST_USER_EMAIL/PASSWORD` secrets exist; with secrets a login precondition is used | Makes generated tests self-contained for apps with open registration |
+| 2026-10-23 | 5 | Added `POST /projects/{id}/source-archives` (zip/tar.gz) as a discovery source besides GitHub | Local development, evaluation harness and customers who can't install the GitHub App yet |
+| 2026-10-23 | 5 | Reference apps carry seeded defects as `DEFECTS=…` toggles (documented in `labels.json`) instead of defect branches; corpus starts with 3 apps (FastAPI, Express, Next.js) | One tree to maintain; the harness and later diagnosis/repair benchmarks switch defects at runtime |
+| 2026-10-23 | 5 | Claude calls use server-side refusal fallbacks (`fallbacks="default"`), adaptive thinking with explicit effort per purpose, structured outputs for closed schemas and prompt-embedded schemas + validation/re-ask for open ones (Workflow IR) | Constrained decoding needs closed schemas; IR is an open schema validated by our own validator |
+| 2026-10-23 | 5 | LangGraph checkpoints live in the `agent_state` schema (migration 0002), reached only by the system role; `agent_threads` (RLS) maps threads to tenants | Checkpoint tables are created by the saver itself; tenant data stays behind RLS |

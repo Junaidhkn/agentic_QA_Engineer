@@ -19,7 +19,7 @@ from typing import Any
 from reliability.modules.workflows.ir import api_steps
 
 ASSETS = Path(__file__).with_name("assets")
-RUNTIME_VERSION = "1"
+RUNTIME_VERSION = "2"
 
 
 def fn_name(key: str, taken: set[str]) -> str:

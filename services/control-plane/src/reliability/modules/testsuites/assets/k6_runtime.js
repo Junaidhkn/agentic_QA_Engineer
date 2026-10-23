@@ -51,7 +51,7 @@ export function genVar(spec) {
   if ("secret" in spec) return __ENV[spec.secret];
   if ("range" in spec) return spec.range[0] + Math.floor(Math.random() * (spec.range[1] - spec.range[0] + 1));
   switch (spec.faker) {
-    case "internet.email": return `re-${hex(10)}@example.test`;
+    case "internet.email": return `re-${hex(10)}@example.com`;
     case "person.name": return `Test ${WORDS[Math.floor(Math.random() * WORDS.length)]}`;
     case "string.uuid": return `${hex(8)}-${hex(4)}-4${hex(3)}-a${hex(3)}-${hex(12)}`;
     case "lorem.word": return WORDS[Math.floor(Math.random() * WORDS.length)];
