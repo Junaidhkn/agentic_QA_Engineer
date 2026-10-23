@@ -1,0 +1,240 @@
+# Implementation Plan and Roadmap
+
+> Written at Gate 7. **Implementation begins only after explicit approval.**
+> Every file references the requirement (FR/NFR) or ADR it implements. Paths follow
+> [low-level-design.md §1](low-level-design.md#1-repository-layout).
+
+**Approved:** no — awaiting approval
+
+## Roadmap at a glance
+
+| Milestone | Ends after | What a user can do | Audience |
+|---|---|---|---|
+| **M1 — Load-test alpha** | Phase 4 | Sign up, connect repo, verify a staging URL, define workflows (manual/OpenAPI), run smoke/baseline/load up to 1,000 VUs, watch live, get findings with evidence | internal + 3–5 design partners |
+| **M2 — Discovery & diagnosis beta** | Phase 7 | Automatic route discovery + generated Playwright/k6 suites; sandbox builds; evidence-cited hypotheses | private beta (~20 orgs) |
+| **M3 — Repair beta** | Phase 9 | Patches + regression tests, verification gates, baseline-vs-patched comparisons, approved PRs; reports; CI gating | private beta |
+| **M4 — Public MVP** | Phase 11 | Hardened, benchmarked, pen-tested; SLOs met for a full month in beta | public |
+
+Rough sizing assumes 4 engineers; ranges are planning estimates, not commitments.
+
+## Phase overview
+
+| # | Phase | Depends on | Est. (eng-weeks) | Status |
+|---|---|---|---|---|
+| 0 | Foundation and vendor choices | — | 4 | ☐ |
+| 1 | Data layer, tenancy, platform core | 0 | 5 | ☐ |
+| 2 | Identity, orgs, projects, GitHub, targets, secrets | 1 | 6 | ☐ |
+| 3 | Execution plane and run pipeline (vertical slice) | 2 | 10 | ☐ |
+| 4 | Telemetry, detection, findings, live dashboard → **M1** | 3 | 6 | ☐ |
+| 5 | LLM gateway, discovery, Workflow IR, test generation | 4 | 9 | ☐ |
+| 6 | Sandbox environments (build + app-under-test) | 3, 5 | 8 | ☐ |
+| 7 | Diagnosis → **M2** | 4, 6 | 8 | ☐ |
+| 8 | Repair, verification gates, approvals, PRs | 6, 7 | 10 | ☐ |
+| 9 | Reports, coverage, CI integration, browser exploration → **M3** | 8 | 6 | ☐ |
+| 10 | Hardening, benchmarks, operations readiness | 9 | 6 | ☐ |
+| 11 | Private-beta exit and public launch → **M4** | 10 | 4 | ☐ |
+
+---
+
+## Phase 0 — Foundation and vendor choices
+**Goal:** a repo where every later phase can add code with CI, local environment and decided vendors.
+**Files to create**
+- `README.md`, `CONTRIBUTING.md` — repo overview, dev setup — ADR-0001
+- `services/control-plane/pyproject.toml`, `uv.lock` — Python project — ADR-0001
+- `services/control-plane/src/reliability/platform/settings.py` — typed config from env — design §8
+- `services/control-plane/src/reliability/main_api.py` — FastAPI app factory, health/readiness — ADR-0001
+- `services/control-plane/src/reliability/main_worker.py` — Celery app, queues `default/agents/github` — ADR-0004
+- `apps/web/` (Next.js App Router skeleton, Tailwind, lint/test config) — ADR-0022
+- `packages/api-client/` (openapi-typescript generation script) — api-contract §1
+- `deploy/local/docker-compose.yml` — Postgres, Redis, MinIO, LGTM, fake GitHub, fake LLM — operations §2
+- `.github/workflows/ci.yml` — lint, typecheck, tests, scans, SBOM — operations §2
+- `.importlinter` — module boundary contracts — ADR-0001
+- `.env.example` — required variables — design §8
+- `docs/architecture/vendors.md` — IdP, email, error-tracking choices + LLM/cloud price sheets → cost model — ADR-0018, ADR-0019, ADR-0020
+**Interfaces introduced**
+- Error envelope + exception mapping; request-id middleware.
+**Tests**
+- health endpoints; CI runs green on empty modules.
+**Decisions involved:** ADR-0001, 0004, 0018, 0019, 0020, 0022
+**Tooling:** GitHub MCP (installed) for issues per phase; `claude-api` skill (available) for vendor/model notes.
+**Done when:** `docker compose up` + `make test` pass locally and in CI; vendor choices recorded.
+
+## Phase 1 — Data layer, tenancy, platform core
+**Goal:** schema, RLS, outbox, audit and quota primitives every module uses.
+**Files to create**
+- `services/control-plane/migrations/versions/0001_core.py` … — DDL from data-model.md — ADR-0002
+- `src/reliability/platform/db.py` — async engine, session-per-request, `SET LOCAL app.org_id` — ADR-0003
+- `src/reliability/platform/rls.py` — migration helper generating policies; CI check script — ADR-0003
+- `src/reliability/platform/outbox.py` + `main_relay.py` — transactional outbox + relay — ADR-0004
+- `src/reliability/modules/audit/` — hash-chained writer, anchor job — FR-29, ADR-0023
+- `src/reliability/modules/quotas/` — plans, ledger reservations, Redis token buckets — FR-31, ADR-0024
+- `src/reliability/platform/idempotency.py` — Idempotency-Key middleware — api-contract §1
+- `src/reliability/platform/storage.py` — `ObjectStore` adapter, key builder, presign — ADR-0005
+**Interfaces introduced**
+- `audit.record(event)`, `quotas.reserve/commit/release`, `ObjectStore.presign_put/get`, `outbox.enqueue(topic, payload)`.
+**Tests**
+- RLS: two orgs, every table, cross-tenant reads/writes fail (NFR-6).
+- Outbox: rollback → no dispatch; crash → redelivery once (ADR-0004).
+- Quota: parallel reservations never exceed limit (property test).
+- Audit chain verification and tamper detection.
+**Decisions involved:** ADR-0002, 0003, 0004, 0005, 0023, 0024
+**Done when:** all core tables migrate up/down on a fresh DB; tenancy suite green.
+
+## Phase 2 — Identity, orgs, projects, GitHub, targets, secrets
+**Goal:** UF-1 onboarding end to end.
+**Files to create**
+- `modules/identity/` — IdP JWT verification adapter, API keys — FR-1, FR-30, FR-32, ADR-0018
+- `modules/tenancy/` — orgs, memberships, invitations, `require(role, resource)` — FR-1, FR-30
+- `modules/projects/` — FR-2
+- `modules/integrations/github/` — App install flow, webhook HMAC, token minting, snapshot download — FR-2, ADR-0017
+- `modules/targets/` — registration, SSRF checks, DNS/HTTP verification, re-verify sweep, environment policy — FR-3…5, ADR-0010
+- `modules/secrets/` — KMS envelope encryption, write-only API — FR-11
+- `apps/web/app/(app)/onboarding/*`, `settings/*` — UF-1 screens
+**Interfaces introduced**
+- `targets.assert_runnable(target, profile)`; `github.mint_token(job)`; `github.snapshot(repo, sha) -> artifact`.
+**Tests**
+- Verification: DNS and file methods, expiry, private-IP rejection, redirect handling (FR-3).
+- Role matrix contract tests (FR-30); webhook signature tests.
+**Decisions involved:** ADR-0010, 0017, 0018
+**Tooling:** GitHub MCP for creating a test GitHub App installation repo (proposed).
+**Done when:** a new user can sign in with GitHub, create a project, link a repo and verify a staging host.
+
+## Phase 3 — Execution plane and run pipeline (vertical slice)
+**Goal:** a manual workflow becomes a k6 load run and a Playwright smoke run against a verified target, safely.
+**Files to create**
+- `infra/terraform/execution-plane/` — account, VPC, ASG + warm pool, egress proxy, NAT EIPs, PrivateLink — ADR-0008, 0009, 0020
+- `infra/packer/runner-host.pkr.hcl` — Docker + gVisor + hardening — ADR-0009
+- `services/runner-agent/` — lease loop, container driver (runsc), per-run networks, egress programming, heartbeats, kill, artifact upload — ADR-0008, FR-17…19
+- `runners/images/k6/`, `runners/images/playwright/` — pinned, signed images — ADR-0012
+- `modules/runners/` — lease API (mTLS), reaper — api-contract §7, NFR-4
+- `modules/admission/` — ordered admission function — FR-14, ADR-0024
+- `modules/runs/` — state machine, events, cancel, kill switch — FR-14…18
+- `modules/loadprofiles/` — profile CRUD + k6 options compiler (thresholds, abortOnFail) — FR-11, FR-16, FR-17
+- `modules/workflows/` (manual IR only) + `packages/workflow-ir/schema.json` — ADR-0013
+- `modules/approvals/` — run approvals (first load, > 500 VUs, production smoke) — FR-5
+- `apps/web/app/(app)/projects/[id]/{runs,profiles,workflows}` — UF-3, UF-4 screens
+**Interfaces introduced**
+- Lease protocol v1; `admission.admit(request) -> Admitted | Rejected(code)`; run state machine transitions.
+**Tests**
+- Runner integration (real gVisor host, nightly): egress denial, metadata blocked, kill ≤ 10 s, resource limits (NFR-7).
+- Admission property tests; production policy (FR-5).
+- k6 under gVisor vs runc benchmark at 1,000 VUs (ADR-0009 follow-up, NFR-1).
+**Decisions involved:** ADR-0008, 0009, 0010, 0012, 0013, 0024
+**Tooling:** AWS/Terraform docs MCP (proposed).
+**Done when:** 1,000-VU, 10-min run against the reference app completes with valid generator health; Stop halts traffic ≤ 10 s.
+
+## Phase 4 — Telemetry, detection, findings, live dashboard → M1
+**Goal:** live charts, run summaries, deterministic findings with evidence.
+**Files to create**
+- `infra/terraform/observability/` + `deploy/otel-gateway/config.yaml` — OTLP gateway, tail sampling, tenant header — ADR-0014
+- LGTM deployment (single-binary Mimir/Tempo/Loki on S3) — ADR-0014
+- `modules/telemetry/` — `TelemetryQuery` adapter (PromQL/TraceQL/LogQL with tenant) — FR-15, FR-23
+- `modules/runs/analysis.py` — steady-state window, summaries, generator validity — FR-19
+- `modules/findings/` — detectors, fingerprints, baselines, evidence attachment — FR-20
+- SSE endpoint + Redis pub/sub — FR-15, ADR-0021
+- `apps/web/.../runs/[runId]`, `findings`, `findings/[fid]` (evidence only) — UF-4, UF-5
+- Customer OTLP ingest tokens (project settings) — FR-23
+**Tests**
+- Detector unit tests on recorded k6 outputs; baseline regression math; SSE resume.
+**Decisions involved:** ADR-0014, 0021, 0022
+**Done when (M1):** design partners run load tests on their staging apps and get findings with evidence; NFR-1 benchmark passes on reference env.
+
+## Phase 5 — LLM gateway, discovery, Workflow IR, test generation
+**Goal:** UF-2 and UF-3 automated: discovered candidates → approved → generated, validated suites.
+**Files to create**
+- `src/reliability/llm/` — gateway: purpose routing, budgets, redaction, schema validation, caching, `llm_usage` — ADR-0019
+- `agents/common/` — budgets, tool registry, untrusted-content wrapper, checkpointer wiring — ADR-0006, ADR-0007
+- `agents/discovery/` — graph, route adapters (Next.js, Express, FastAPI), OpenAPI import — FR-6, FR-7, FR-9
+- `agents/testgen/` — graph, templates, static checks, dry run, flake check — FR-10, FR-12, FR-13
+- `modules/discovery/`, `modules/testsuites/`, `modules/workflows/` (candidates, review, coverage) — FR-9
+- `benchmarks/reference-apps/` (3 stacks, healthy + first defect branches) and `benchmarks/harness/` — evaluation §3
+- `.github/workflows/evals.yml` — agent eval gate — evaluation §4
+- `apps/web/.../discovery`, `workflows` (review UI, IR editor), `suites`
+**Tests**
+- Route extraction recall on labelled apps; IR validation; generated test validity/flake metrics; prompt-injection fixtures in repos.
+**Decisions involved:** ADR-0006, 0007, 0013, 0019
+**Tooling:** `claude-api` skill (available) for gateway implementation; Playwright MCP (proposed) to inspect reference apps while writing templates.
+**Done when:** on the corpus, route recall ≥ 95% and test validity ≥ 85% (evaluation §4).
+
+## Phase 6 — Sandbox environments
+**Goal:** build and run the customer app in a controlled, instrumented sandbox (ADR-0011).
+**Files to create**
+- `runners/images/build/` — buildpacks/Dockerfile/compose builders with layer cache — ADR-0011
+- `runners/images/otel-autoinstrument/` — Node/Python zero-code instrumentation injection — FR-23
+- `services/runner-agent/sandbox_env/` — compose rewriting to runsc, ephemeral DB, migrations, seed, stub server, exporters — ADR-0011
+- Package mirror (npm/PyPI proxy) Terraform — threat-model A6
+- `modules/runs` support for `environment_kind = sandbox_build` — FR-25 prerequisite
+**Tests**
+- Build success matrix over reference apps and 20 public sample apps; DB seeding; stub routing; telemetry presence.
+**Decisions involved:** ADR-0009, 0011
+**Done when:** ≥ 80% of corpus apps build and serve in sandbox; traces and DB stats visible for runs.
+
+## Phase 7 — Diagnosis → M2
+**Goal:** UF-5 hypotheses with verified evidence and rubric confidence.
+**Files to create**
+- `agents/diagnosis/` — evidence pack collectors, read-only tools, hypothesis schema, citation checker, experiments, rubric — FR-21, FR-22, ADR-0015
+- `modules/diagnosis/` — API, persistence, feedback — FR-22
+- `apps/web/.../findings/[fid]` — hypotheses, confidence factors, evidence deep links, feedback
+**Tests**
+- Citation checker unit tests (numeric tolerance, missing evidence); rubric calibration on corpus; top-3 precision gate.
+**Decisions involved:** ADR-0007, 0015
+**Done when (M2):** top-3 precision ≥ 60% on the corpus; 100% of displayed hypotheses have verified citations.
+
+## Phase 8 — Repair, verification gates, approvals, PRs
+**Goal:** UF-6 end to end.
+**Files to create**
+- `runners/images/coding-tools/` — repo checkout, allowlisted commands — agent-workflows §6
+- `agents/repair/` — graph, sandbox tools, diff policy pre-check — FR-24, ADR-0007
+- `modules/verification/` — gate pipeline, comparison statistics (BCa bootstrap), noise-floor jobs — FR-25, FR-26, ADR-0016
+- `runners/images/security-scan/` — semgrep, osv-scanner, gitleaks, ZAP baseline — FR-25
+- `modules/repairs/`, `modules/approvals/` (repair PR approvals), `integrations/github/pr.py` (template PR) — FR-27, ADR-0017
+- `apps/web/.../repairs/[rid]` — diff viewer, gates, comparison, approve/reject
+**Tests**
+- Gate pipeline integration on corpus defects; fail-to-pass logic; statistics property tests (A/A yields no_change); no merge code path test; prompt-injection repo suite.
+**Decisions involved:** ADR-0007, 0011, 0016, 0017
+**Done when:** verified rate ≥ 40%, oracle pass ≥ 90%, false-verified < 5% on corpus.
+
+## Phase 9 — Reports, coverage, CI integration, browser exploration → M3
+**Files to create**
+- `modules/reports/` — trends, coverage, HTML/JSON export, share links — FR-28
+- `/v1/runs/{id}/verdict` + GitHub Action example `examples/ci/reliability-check.yml` — FR-32
+- `agents/discovery/explore_ui.py` — bounded browser exploration with denylist — FR-8
+- `apps/web/.../reports`, `/approvals`, `settings/usage`, `settings/audit`
+**Tests:** report correctness snapshots; CI verdict contract; exploration never triggers denylisted actions on fixture app.
+**Decisions involved:** ADR-0013, 0022
+**Done when (M3):** design partners complete UF-1…UF-7 unaided.
+
+## Phase 10 — Hardening, benchmarks, operations readiness
+**Files to create**
+- `infra/terraform/control-plane/` production sizing, WAF, alarms — operations §1, §6
+- `docs/runbooks/*.md` — operations §9
+- SLO dashboards + burn-rate alerts; synthetic canary org — NFR-3, NFR-4
+- Restore drill automation — NFR-9
+- Platform load test (25 concurrent load runs + 100 functional/hour) — NFR-4
+**Tests:** external penetration test; chaos game day; full evaluation.md §5 table.
+**Done when:** every row in evaluation.md §5 passes on staging; pen-test highs fixed.
+
+## Phase 11 — Private-beta exit and public launch → M4
+- Plans and limits finalized; ToS/AUP (load-testing consent), DPA, sub-processor list — NFR-14
+- Abuse review queue and operator tools — threat-model A1
+- One month of beta meeting NFR-3/NFR-4; launch checklist.
+
+## Post-MVP roadmap (Deferred, with triggers)
+
+| Item | Trigger |
+|---|---|
+| Kubernetes + k6-operator, > 1,000 VUs, distributed generators | sustained > 20 hosts or customer need > 1,000 VUs |
+| Multi-region generators | customers needing geo-distributed load |
+| Production smoke/canary monitoring and production load windows | enterprise customer with change-management process |
+| Supabase/Firebase local emulation | > 30% onboarding blocked by BaaS |
+| More frameworks (Django, Rails, Laravel, Remix, SvelteKit) | demand per stack |
+| GitLab / Bitbucket | customer demand |
+| SSO/SAML, SCIM | team-plan requirement |
+| Stripe billing and metering | paid launch |
+| Self-hosted runners (customer VPC) | customers unable to expose staging |
+| Browser-based performance under load | demand for front-end metrics |
+| Customer-facing Grafana / ad-hoc queries | power-user demand |
+
+## Deviations log
+| Date | Phase | Deviation | Reason |
+|---|---|---|---|
