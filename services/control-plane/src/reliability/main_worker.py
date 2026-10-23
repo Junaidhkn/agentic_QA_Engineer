@@ -12,6 +12,7 @@ import logging
 from typing import Any
 
 from celery import Celery
+from celery.schedules import crontab
 from celery.signals import worker_process_init
 
 from reliability.platform import db
@@ -33,7 +34,18 @@ celery_app.conf.update(
     accept_content=["json"],
     timezone="UTC",
     enable_utc=True,
-    beat_schedule={},
+    beat_schedule={
+        "audit-anchor": {
+            "task": "reliability.run_job",
+            "args": ["audit.anchor", {}],
+            "schedule": crontab(minute=5, hour=0),
+        },
+        "partitions": {
+            "task": "reliability.run_job",
+            "args": ["maintenance.partitions", {}],
+            "schedule": crontab(minute=15, hour=1),
+        },
+    },
 )
 
 

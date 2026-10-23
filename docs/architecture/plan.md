@@ -4,7 +4,7 @@
 > Every file references the requirement (FR/NFR) or ADR it implements. Paths follow
 > [low-level-design.md §1](low-level-design.md#1-repository-layout).
 
-**Approved:** no — awaiting approval
+**Approved:** yes — 2026-10-23 (user: "approved, start phase 0 and do not stop until all are complete")
 
 ## Roadmap at a glance
 
@@ -21,8 +21,8 @@ Rough sizing assumes 4 engineers; ranges are planning estimates, not commitments
 
 | # | Phase | Depends on | Est. (eng-weeks) | Status |
 |---|---|---|---|---|
-| 0 | Foundation and vendor choices | — | 4 | ☐ |
-| 1 | Data layer, tenancy, platform core | 0 | 5 | ☐ |
+| 0 | Foundation and vendor choices | — | 4 | ☑ |
+| 1 | Data layer, tenancy, platform core | 0 | 5 | ☑ |
 | 2 | Identity, orgs, projects, GitHub, targets, secrets | 1 | 6 | ☐ |
 | 3 | Execution plane and run pipeline (vertical slice) | 2 | 10 | ☐ |
 | 4 | Telemetry, detection, findings, live dashboard → **M1** | 3 | 6 | ☐ |
@@ -238,3 +238,7 @@ Rough sizing assumes 4 engineers; ranges are planning estimates, not commitments
 ## Deviations log
 | Date | Phase | Deviation | Reason |
 |---|---|---|---|
+| 2026-10-23 | 1 | RLS keys on a per-transaction list `app.org_ids` (all orgs the caller belongs to) instead of a single `app.org_id`; role checks per resource happen in the policy layer | Project-scoped URLs don't carry the org; RLS still fails closed and limits every query to the caller's orgs |
+| 2026-10-23 | 1 | Cross-tenant jobs use a `re_system` role with BYPASSRLS, restricted to an allowlist of modules enforced by a test, instead of column-limited policies | Simpler, same blast-radius control; usage is test-enforced |
+| 2026-10-23 | 1 | Partitioned tables use a DEFAULT partition plus a daily job creating future monthly partitions (no pg_partman) | Works on any Postgres without extensions |
+| 2026-10-23 | 1 | Added tables: invitations, feature_flags, ingest_tokens, execution_jobs, reports, abuse_reviews, audit_anchors | Needed by API endpoints/jobs already in the design |
