@@ -70,17 +70,32 @@ def test_tail_reads_only_complete_lines(tmp_path: Path) -> None:
     tail = _Tail(f)
     assert tail.read_lines() == ['{"a":1}']
     with f.open("a") as fh:
-        fh.write('2}\n')
+        fh.write("2}\n")
     assert tail.read_lines() == ['{"b":2}']
 
 
 def test_docker_args_enforce_isolation(tmp_path: Path) -> None:
     cfg = Config(env="production", driver="docker", runner_token="x", workdir=str(tmp_path))
-    spec = CommandSpec("k6", ["run", "scenarios.js"], tmp_path, {"BASE_URL": "https://s.example.com"},
-                       {"PASSWORD": "p"}, Limits(4, 8, 4096))
+    spec = CommandSpec(
+        "k6",
+        ["run", "scenarios.js"],
+        tmp_path,
+        {"BASE_URL": "https://s.example.com"},
+        {"PASSWORD": "p"},
+        Limits(4, 8, 4096),
+    )
     args = run_args(cfg, "abcdef0123456789", spec, tmp_path / ".secrets.env")
-    for flag in ("--runtime", "runsc", "--read-only", "--cap-drop", "ALL", "--pids-limit", "4096",
-                 "no-new-privileges", network_name("abcdef0123456789")):
+    for flag in (
+        "--runtime",
+        "runsc",
+        "--read-only",
+        "--cap-drop",
+        "ALL",
+        "--pids-limit",
+        "4096",
+        "no-new-privileges",
+        network_name("abcdef0123456789"),
+    ):
         assert flag in args
     assert "PASSWORD=p" not in " ".join(args)  # secrets only via --env-file
     assert "--env-file" in args

@@ -27,6 +27,9 @@ class EnvironmentIn(BaseModel):
     type: Literal["target_url", "sandbox_build"] = "target_url"
     target_id: uuid.UUID | None = None
     commit_sha: str | None = Field(default=None, pattern="^[0-9a-f]{40}$")
+    # sandbox_build: build from a branch/commit of the connected repository or an uploaded archive
+    commit_ref: str | None = Field(default=None, max_length=200)
+    archive_artifact_id: uuid.UUID | None = None
 
 
 class RunCreate(BaseModel):
@@ -143,7 +146,14 @@ async def create_run(
         load_profile_id=body.load_profile_id,
         target_id=body.environment.target_id,
         environment_kind=body.environment.type,
-        build_ref={"commit_sha": body.environment.commit_sha} if body.environment.commit_sha else None,
+        build_ref={
+            "commit_ref": body.environment.commit_sha or body.environment.commit_ref,
+            "archive_artifact_id": str(body.environment.archive_artifact_id)
+            if body.environment.archive_artifact_id
+            else None,
+        }
+        if body.environment.type == "sandbox_build"
+        else None,
         notes=body.notes,
         idempotency_key=key,
     )

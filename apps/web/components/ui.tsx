@@ -89,7 +89,7 @@ const STATUS_TONE: Record<string, keyof typeof BADGE_TONES> = {
   pending: "warn", queued: "info", running: "info", provisioning: "info", analyzing: "info", pending_approval: "warn",
   failed: "danger", errored: "danger", invalid: "warn", rejected: "danger", revoked: "danger", expired: "warn",
   cancelled: "muted", candidate: "info", critical: "danger", high: "danger", medium: "warn", low: "muted",
-  open: "warn", flaky: "warn", awaiting_review: "info", budget_exhausted: "warn", generating: "info", validating: "info", partially_ready: "warn", regressed: "danger", inconclusive: "warn", no_change: "muted",
+  open: "warn", flaky: "warn", awaiting_review: "info", succeeded: "ok", building: "info", planning: "info", budget_exhausted: "warn", generating: "info", validating: "info", partially_ready: "warn", regressed: "danger", inconclusive: "warn", no_change: "muted",
 };
 
 export function Badge({ children, tone }: { children: ReactNode; tone?: keyof typeof BADGE_TONES }) {

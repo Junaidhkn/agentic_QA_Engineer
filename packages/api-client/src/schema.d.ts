@@ -567,6 +567,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/projects/{project_id}/sandbox-builds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Builds */
+        get: operations["list_builds_v1_projects__project_id__sandbox_builds_get"];
+        put?: never;
+        /**
+         * Start Build
+         * @description Check that the app builds and serves in a sandbox (plan → build → start → migrate/seed → health).
+         */
+        post: operations["start_build_v1_projects__project_id__sandbox_builds_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects/{project_id}/secrets": {
         parameters: {
             query?: never;
@@ -872,6 +893,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sandbox-builds/{build_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Build */
+        get: operations["get_build_v1_sandbox_builds__build_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sandbox-builds/{build_id}/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Build Log */
+        get: operations["build_log_v1_sandbox_builds__build_id__log_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/targets/{target_id}": {
         parameters: {
             query?: never;
@@ -1160,6 +1215,51 @@ export interface components {
             /** Next Cursor */
             next_cursor: string | null;
         };
+        /** BuildCreate */
+        BuildCreate: {
+            /** Archive Artifact Id */
+            archive_artifact_id?: string | null;
+            /** Commit Ref */
+            commit_ref?: string | null;
+        };
+        /** BuildOut */
+        BuildOut: {
+            /** Commit Sha */
+            commit_sha: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Error */
+            error: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Plan */
+            plan: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Report */
+            report: {
+                [key: string]: unknown;
+            } | null;
+            /** Source */
+            source: {
+                [key: string]: unknown;
+            };
+            /** Status */
+            status: string;
+        };
         /** BulkReview */
         BulkReview: {
             /** Approve */
@@ -1268,6 +1368,10 @@ export interface components {
         };
         /** EnvironmentIn */
         EnvironmentIn: {
+            /** Archive Artifact Id */
+            archive_artifact_id?: string | null;
+            /** Commit Ref */
+            commit_ref?: string | null;
             /** Commit Sha */
             commit_sha?: string | null;
             /** Target Id */
@@ -3767,6 +3871,76 @@ export interface operations {
             };
         };
     };
+    list_builds_v1_projects__project_id__sandbox_builds_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_build_v1_projects__project_id__sandbox_builds_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BuildCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_secrets_v1_projects__project_id__secrets_get: {
         parameters: {
             query?: never;
@@ -4493,6 +4667,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_build_v1_sandbox_builds__build_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                build_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    build_log_v1_sandbox_builds__build_id__log_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                build_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadUrl"];
                 };
             };
             /** @description Validation Error */

@@ -25,7 +25,7 @@ class AcquireIn(BaseModel):
 
 class HeartbeatIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    phase: Literal["provisioning", "running", "uploading"] | None = None
+    phase: Literal["provisioning", "building", "starting", "running", "uploading"] | None = None
     progress: dict[str, Any] | None = None
 
 

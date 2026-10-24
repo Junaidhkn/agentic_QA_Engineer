@@ -27,7 +27,7 @@ Rough sizing assumes 4 engineers; ranges are planning estimates, not commitments
 | 3 | Execution plane and run pipeline (vertical slice) | 2 | 10 | ☑ |
 | 4 | Telemetry, detection, findings, live dashboard → **M1** | 3 | 6 | ☑ |
 | 5 | LLM gateway, discovery, Workflow IR, test generation | 4 | 9 | ☑ |
-| 6 | Sandbox environments (build + app-under-test) | 3, 5 | 8 | ☐ |
+| 6 | Sandbox environments (build + app-under-test) | 3, 5 | 8 | ☑ |
 | 7 | Diagnosis → **M2** | 4, 6 | 8 | ☐ |
 | 8 | Repair, verification gates, approvals, PRs | 6, 7 | 10 | ☐ |
 | 9 | Reports, coverage, CI integration, browser exploration → **M3** | 8 | 6 | ☐ |
@@ -261,3 +261,11 @@ Rough sizing assumes 4 engineers; ranges are planning estimates, not commitments
 | 2026-10-23 | 5 | Reference apps carry seeded defects as `DEFECTS=…` toggles (documented in `labels.json`) instead of defect branches; corpus starts with 3 apps (FastAPI, Express, Next.js) | One tree to maintain; the harness and later diagnosis/repair benchmarks switch defects at runtime |
 | 2026-10-23 | 5 | Claude calls use server-side refusal fallbacks (`fallbacks="default"`), adaptive thinking with explicit effort per purpose, structured outputs for closed schemas and prompt-embedded schemas + validation/re-ask for open ones (Workflow IR) | Constrained decoding needs closed schemas; IR is an open schema validated by our own validator |
 | 2026-10-23 | 5 | LangGraph checkpoints live in the `agent_state` schema (migration 0002), reached only by the system role; `agent_threads` (RLS) maps threads to tenants | Checkpoint tables are created by the saver itself; tenant data stays behind RLS |
+| 2026-10-24 | 6 | A sandboxed run is one lease (fetch source → build → start → migrate/seed → health → test → collect → teardown) instead of separate `sandbox_build` and `sandbox_env` jobs; a standalone `sandbox_build` job type checks buildability and shows the plan | Fewer moving parts and no cross-job hand-off of running containers; same isolation |
+| 2026-10-24 | 6 | Build plans are computed deterministically by the control plane (`modules/environments/plan.py`) and shown before anything runs; template strategy uses platform Dockerfile templates (exec-form commands) instead of Cloud Native Buildpacks | Reviewable plans, works offline against the package mirror, no buildpack builder images to maintain |
+| 2026-10-24 | 6 | Process sandbox for local development and tests: app runs as host processes, ephemeral database on `RA_SANDBOX_POSTGRES_URL`, optional inherited Python packages; refused outside local/test like the process driver | Lets the whole sandbox path (incl. migrations, seed, DB evidence) be tested without Docker |
+| 2026-10-24 | 6 | Database evidence comes from SQL snapshots taken by the runner (`pg_stat_database`, `pg_stat_user_tables/indexes`, `pg_stat_statements` when available) plus connection samples every 5 s, stored in the run's sandbox report and a `telemetry_snapshot` artifact; postgres_exporter/cAdvisor deferred | Same evidence for diagnosis with no extra containers; exporters can be added when time series are needed |
+| 2026-10-24 | 6 | Package mirror is AWS CodeArtifact (npm + PyPI upstreams) behind interface endpoints, read-only for runner hosts | Managed, auditable, no mirror servers to run |
+| 2026-10-24 | 6 | Stub server covers dependencies whose base URL comes from an environment variable; hard-coded external hosts are reported as plan warnings (no TLS interception); seeds come from the project's own seed scripts (no generated synthetic seed yet) | Predictable behaviour; synthetic seeding is follow-up work driven by onboarding data |
+| 2026-10-24 | 6 | App secrets for sandboxes are project secrets named `SANDBOX_<NAME>`; other required settings get placeholders listed in the plan | Explicit opt-in, never mixes test-user credentials with app configuration |
+| 2026-10-24 | 6 | Build-success matrix measured over the reference corpus (process sandbox, CI `evals.yml`); the 20-public-app matrix moves to Phase 10 benchmarks on a Docker-capable CI runner | No Docker in this CI; Docker paths are covered by command/compose construction tests |

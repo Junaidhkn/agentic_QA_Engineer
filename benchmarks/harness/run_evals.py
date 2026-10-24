@@ -36,7 +36,7 @@ from reliability.modules.workflows.ir import validation_errors
 
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS = ROOT / "reference-apps"
-GATES = {"route_recall": 0.95, "test_validity": 0.85}
+GATES = {"route_recall": 0.95, "test_validity": 0.85, "sandbox_build": 0.80}
 
 
 def _files(root: Path) -> dict[str, str]:
@@ -108,7 +108,50 @@ def _dry_run(k6: str, bundle_dir: Path, exec_name: str, base: str, repeats: int 
     return passed, last
 
 
-async def evaluate(app_dir: Path, use_llm: bool, k6: str | None) -> dict[str, Any]:
+SANDBOX_LIMIT_S = int(os.environ.get("EVAL_SANDBOX_LIMIT_S", "900"))
+
+
+async def _build_and_start(sbx: Any) -> None:
+    await sbx.build()
+    await sbx.start()
+
+
+async def sandbox_check(app_dir: Path, files: dict[str, str], run: bool) -> dict[str, Any]:
+    """Build plan for every app; with ``--sandbox``, build → start → health in a process
+    sandbox (``RA_SANDBOX_POSTGRES_URL`` provides databases). Docker builds run on runner hosts."""
+    from reliability.modules.environments.plan import plan_for
+
+    snap = snapshot.from_files(files)
+    snap.lockfiles |= {k for k in files if k.endswith(("package-lock.json", "pnpm-lock.yaml", "yarn.lock"))}
+    plan = plan_for(snap).to_dict()
+    result: dict[str, Any] = {"planned": plan["unsupported"] is None, "strategy": plan["strategy"],
+                              "services": sorted(plan["services"]), "built": None}
+    if not run or plan["unsupported"]:
+        return result
+    from runner_agent.config import Config
+    from runner_agent.sandbox_env.base import SandboxError
+    from runner_agent.sandbox_env.process import ProcessSandbox
+
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "src"
+        shutil.copytree(app_dir, src, ignore=shutil.ignore_patterns("__pycache__", "node_modules", ".next"))
+        cfg = Config(env="test", sandbox_postgres_url=os.environ.get("RA_SANDBOX_POSTGRES_URL"),
+                     sandbox_inherit_site_packages=True)
+        sbx = ProcessSandbox(cfg, f"eval{uuid.uuid4().hex[:8]}", src, plan, {}, None, Path(tmp) / "sandbox.log")
+        try:
+            await asyncio.wait_for(_build_and_start(sbx), SANDBOX_LIMIT_S)
+            result["built"] = True
+        except TimeoutError:
+            result.update(built=False, error=f"timeout after {SANDBOX_LIMIT_S}s")
+        except SandboxError as exc:
+            result.update(built=False, error=f"{exc.phase}: {exc.message[:300]}")
+        finally:
+            await sbx.stop()
+        result["phases"] = sbx.report.phases
+    return result
+
+
+async def evaluate(app_dir: Path, use_llm: bool, k6: str | None, run_sandbox: bool = False) -> dict[str, Any]:
     labels = json.loads((app_dir / "labels.json").read_text())
     files = _files(app_dir)
     snap = snapshot.from_files(files)
@@ -131,6 +174,7 @@ async def evaluate(app_dir: Path, use_llm: bool, k6: str | None) -> dict[str, An
     out.update(candidates=len(cands), from_model=sum(c.get("origin") == "model" for c in cands),
                invalid_ir=sum(bool(validation_errors(c["ir"])) for c in cands), llm_tokens=budget.spent,
                llm_rejected=len(result.get("llm", {}).get("rejected", [])))
+    out["sandbox"] = await sandbox_check(app_dir, files, run_sandbox)
     api_irs = [c["ir"] for c in cands if c["ir"]["kind"] == "api"]
     run = labels.get("run")
     started = _start(app_dir, run) if run and k6 and api_irs else None
@@ -161,26 +205,38 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--llm", action="store_true", help="include the model synthesis step")
     parser.add_argument("--out", default=str(ROOT / "out"))
+    parser.add_argument("--sandbox", action="store_true", help="build and start each app in a process sandbox")
     args = parser.parse_args()
     checkpoint.use_memory_checkpointer()
     k6 = os.environ.get("K6_BINARY") or shutil.which("k6")
-    reports = [asyncio.run(evaluate(app, args.llm, k6)) for app in sorted(CORPUS.iterdir())
-               if (app / "labels.json").exists()]
+    reports = []
+    for app in sorted(CORPUS.iterdir()):
+        if (app / "labels.json").exists():
+            print(f"evaluating {app.name} …", file=sys.stderr, flush=True)
+            reports.append(asyncio.run(evaluate(app, args.llm, k6, args.sandbox)))
     recall = min(r["route_recall"] for r in reports)
     validities = [r["test_validity"] for r in reports if r["test_validity"] is not None]
     validity = sum(validities) / len(validities) if validities else None
+    attempted = [r["sandbox"]["built"] for r in reports if r["sandbox"]["built"] is not None]
+    planned = sum(r["sandbox"]["planned"] for r in reports) / len(reports)
+    sandbox_rate = sum(attempted) / len(attempted) if attempted else planned
     gates = {
         "route_recall": {"value": recall, "min": GATES["route_recall"], "ok": recall >= GATES["route_recall"]},
         "test_validity": {"value": validity, "min": GATES["test_validity"],
                           "ok": validity is None or validity >= GATES["test_validity"]},
+        "sandbox_build": {"value": sandbox_rate, "min": GATES["sandbox_build"],
+                          "ok": sandbox_rate >= GATES["sandbox_build"], "measured": "built" if attempted else "planned"},
     }
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "report.json").write_text(json.dumps({"apps": reports, "gates": gates, "llm": args.llm}, indent=2))
-    lines = ["| app | route recall | candidates | from model | test validity |", "|---|---|---|---|---|"]
+    lines = ["| app | route recall | candidates | from model | test validity | sandbox |", "|---|---|---|---|---|---|"]
     for r in reports:
         v = "skipped" if r["test_validity"] is None else f"{r['test_validity']:.0%}"
-        lines.append(f"| {r['app']} | {r['route_recall']:.0%} | {r['candidates']} | {r['from_model']} | {v} |")
+        sb = r["sandbox"]
+        sbx = ("built" if sb["built"] else f"failed ({sb.get('error', '')[:40]})") if sb["built"] is not None else (
+            f"planned ({sb['strategy']})" if sb["planned"] else "unsupported")
+        lines.append(f"| {r['app']} | {r['route_recall']:.0%} | {r['candidates']} | {r['from_model']} | {v} | {sbx} |")
     lines.append("")
     lines += [f"- {k}: {g['value'] if g['value'] is None else round(g['value'], 3)} (min {g['min']}) "
               f"{'PASS' if g['ok'] else 'FAIL'}" for k, g in gates.items()]

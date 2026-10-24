@@ -13,3 +13,9 @@ CI, and pre-pulled into the runner AMI by Packer.
 
 Local development without Docker: `cd runners/images/playwright && npm ci && npx playwright install chromium`,
 then point `RA_PLAYWRIGHT_DIR` here and `RA_K6_BINARY` at a local k6.
+
+## Sandbox images (Phase 6)
+
+- `otel-autoinstrument/` — zero-code OpenTelemetry layer (Python + Node) copied into sandbox app images.
+- `build/` — how sandbox images are built (BuildKit builder per job, package mirror only, layer cache per project).
+- The runner-agent image also serves as the sandbox **stub server** (`python -m runner_agent.sandbox_env.stub`).

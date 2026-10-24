@@ -7,6 +7,7 @@ from fastapi import APIRouter, FastAPI
 from reliability.modules.approvals import api as approvals_api
 from reliability.modules.artifacts import api as artifacts_api
 from reliability.modules.discovery import api as discovery_api
+from reliability.modules.environments import api as environments_api
 from reliability.modules.findings import api as findings_api
 from reliability.modules.identity import api as identity_api
 from reliability.modules.integrations.github import api as github_api
@@ -34,6 +35,7 @@ V1_MODULES = [
     discovery_api,
     workflows_api,
     testsuites_api,
+    environments_api,
     loadprofiles_api,
     runs_api,
     approvals_api,

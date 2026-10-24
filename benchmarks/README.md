@@ -16,4 +16,8 @@ RE_LLM_PROVIDER=anthropic RE_ANTHROPIC_API_KEY=… \
   uv run python ../../benchmarks/harness/run_evals.py --llm    # with the model step
 ```
 
-Gates (evaluation §4): route recall ≥ 95%, generated-test validity ≥ 85%.
+`--sandbox` also builds and starts every app in a process sandbox (set `RA_SANDBOX_POSTGRES_URL`
+for apps that need a database) to measure sandbox build success.
+
+Gates (evaluation §4): route recall ≥ 95%, generated-test validity ≥ 85%, sandbox build
+success ≥ 80% (plan.md Phase 6).

@@ -26,7 +26,29 @@ class Config(BaseSettings):
     workdir: str = ".local/runner"
     k6_binary: str = "k6"
     playwright_dir: str = "runners/images/playwright"
-    job_types: list[str] = ["functional", "load", "probe", "verification", "test_validation"]
+    job_types: list[str] = [
+        "functional",
+        "load",
+        "probe",
+        "verification",
+        "test_validation",
+        "sandbox_build",
+        "sandbox_env",
+    ]
+    # Sandboxes (ADR-0011)
+    sandbox_postgres_url: str | None = None  # process sandbox: admin DSN for ephemeral databases (local/test)
+    sandbox_redis_url: str | None = None  # process sandbox: shared Redis (local/test)
+    sandbox_inherit_site_packages: bool = False  # process sandbox: reuse the runner's Python packages (offline dev)
+    pip_index_url: str | None = None  # package mirror (CodeArtifact/PyPI proxy)
+    npm_registry: str | None = None
+    mirror_hosts: list[str] = []  # egress allowlist for builds
+    build_cache_dir: str = ".local/runner-cache"
+    runner_image: str = "ghcr.io/reliability-engineer/runner-agent:latest"
+    otel_autoinstrument_image: str = "ghcr.io/reliability-engineer/otel-autoinstrument:latest"
+    otel_collector_image: str = "otel/opentelemetry-collector-contrib:0.116.1"
+    sandbox_postgres_image: str = "postgres:16.6"
+    sandbox_redis_image: str = "redis:7.4.1"
+    curl_image: str = "curlimages/curl:8.11.1"
     http_timeout_s: float = 30.0
     max_raw_upload_bytes: int = 64 * 1024 * 1024
 

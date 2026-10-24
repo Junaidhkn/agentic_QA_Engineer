@@ -35,8 +35,8 @@ from reliability.platform.redis_client import get_redis
 log = logging.getLogger(__name__)
 
 ALLOWED: dict[str, set[str]] = {
-    "pending_approval": {"queued", "rejected", "cancelled"},
-    "queued": {"provisioning", "cancelled", "errored"},
+    "pending_approval": {"queued", "rejected", "cancelled", "invalid"},
+    "queued": {"provisioning", "cancelled", "errored", "invalid"},  # invalid: environment cannot be provided
     "provisioning": {"running", "cancelling", "errored", "analyzing"},
     "running": {"analyzing", "cancelling", "errored"},
     "cancelling": {"cancelled", "analyzing", "errored"},
@@ -93,6 +93,9 @@ async def add_event(session: AsyncSession, run: Run, type_: str, payload: dict[s
     except Exception:  # live view is best-effort; Postgres has the event
         log.debug("redis publish failed", exc_info=True)
     return seq
+
+
+SANDBOX_SETUP_S = 900  # build + start + migrate/seed before testing
 
 
 def _wall_clock(profile: LoadProfile | None) -> int:
@@ -192,6 +195,21 @@ async def create_run(
     target = await targets.get(session, target_id) if target_id else None
     if target is not None and target.project_id != project.id:
         raise AppError("NOT_FOUND", "target not found")
+    if environment_kind == "sandbox_build":
+        from reliability.modules.environments import source as sandbox_source
+
+        if target is not None:
+            raise AppError("VALIDATION_FAILED", "sandbox runs build the app themselves; omit target_id")
+        ref = build_ref or {}
+        build_ref = {
+            "status": "pending",
+            "source": await sandbox_source.describe(
+                session,
+                project.id,
+                commit_ref=ref.get("commit_ref"),
+                archive_artifact_id=uuid.UUID(ref["archive_artifact_id"]) if ref.get("archive_artifact_id") else None,
+            ),
+        }
 
     run_id = uuid7()
     admission = await admit(
@@ -209,6 +227,9 @@ async def create_run(
         ),
     )
     config = await _config(session, kind, suite.id, profile)
+    if environment_kind == "sandbox_build":
+        config["max_wall_s"] = int(config.get("max_wall_s", 1800)) + SANDBOX_SETUP_S
+        config["sandbox"] = True
     if target is not None:
         config["target"] = {"base_url": target.base_url, "host": target.host, "environment": target.environment}
     run = Run(
@@ -237,6 +258,10 @@ async def create_run(
     await session.flush()
     actor = principal.actor if principal else SYSTEM
     await add_event(session, run, "status", {"status": run.status, "reasons": admission.approval_reasons})
+    if environment_kind == "sandbox_build":
+        await outbox.enqueue(
+            session, "environments.prepare_run", {"run_id": run.id, "org_id": run.org_id}, org_id=run.org_id
+        )
     if admission.status == "pending_approval":
         await approvals.request(
             session,
@@ -394,9 +419,14 @@ async def finish_execution(
     abort_reason: str | None,
     generator_health: dict[str, Any],
     usage: dict[str, int],
+    sandbox_report: dict[str, Any] | None = None,
 ) -> None:
     """Called when the runner completes the lease; analysis happens in a background job."""
     run.generator_health = generator_health
+    if sandbox_report is not None:
+        run.build_ref = {**(run.build_ref or {}), "report": sandbox_report}
+        if outcome == "error" and sandbox_report.get("error"):
+            abort_reason = f"sandbox: {sandbox_report['error']}"
     run.config_snapshot = {
         **run.config_snapshot,
         "_execution": {"outcome": outcome, "abort_reason": abort_reason, "usage": usage},
@@ -411,6 +441,12 @@ async def finish_execution(
         return
     await transition(session, run, "analyzing")
     await outbox.enqueue(session, "runs.analyze", {"run_id": str(run.id), "org_id": str(run.org_id)}, org_id=run.org_id)
+
+
+async def reject_environment(session: AsyncSession, run: Run, reason: str) -> None:
+    """The run's environment cannot be provided (e.g. the sandbox cannot be built)."""
+    await _release_quota(session, run)
+    await transition(session, run, "invalid", reason[:500])
 
 
 async def settle_usage(session: AsyncSession, run: Run) -> None:

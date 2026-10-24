@@ -16,12 +16,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import and_, literal, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reliability.modules.artifacts import service as artifacts
 from reliability.modules.audit import service as audit
-from reliability.modules.runners.spec import UPLOADS, build_run_spec, upload_key
+from reliability.modules.runners.spec import build_run_spec, upload_key
 from reliability.modules.runs import service as runs
 from reliability.modules.runs.models import ExecutionJob, Run, RunnerLease
 from reliability.modules.targets.models import Target
@@ -75,7 +75,18 @@ async def _try_acquire(runner: str, public_key: str, job_types: set[str]) -> dic
             run = (
                 await session.execute(
                     select(Run)
-                    .where(Run.status == "queued", Run.kind.in_(job_types & set(RUN_JOB_TYPES)))
+                    .where(
+                        Run.status == "queued",
+                        Run.kind.in_(job_types & set(RUN_JOB_TYPES)),
+                        # Sandbox runs need a sandbox-capable runner and a prepared build plan.
+                        or_(
+                            Run.environment_kind == "target_url",
+                            and_(
+                                literal("sandbox_env" in job_types),
+                                Run.build_ref["status"].astext == "ready",
+                            ),
+                        ),
+                    )
                     .order_by(Run.queued_at)
                     .limit(1)
                     .with_for_update(skip_locked=True)
@@ -83,7 +94,7 @@ async def _try_acquire(runner: str, public_key: str, job_types: set[str]) -> dic
             ).scalar_one_or_none()
             if run is not None:
                 return await _lease_run(session, run, runner, public_key)
-        other = job_types - set(RUN_JOB_TYPES)
+        other = job_types - set(RUN_JOB_TYPES) - {"sandbox_env"}
         if other:
             job = (
                 await session.execute(
@@ -123,7 +134,7 @@ async def _lease_run(session: AsyncSession, run: Run, runner: str, public_key: s
             subject_id=run.id,
             runner_id=runner,
             state="active",
-            spec={"uploads": list(UPLOADS[run.kind])},
+            spec={"uploads": list(spec["uploads"])},
             expires_at=datetime.now(UTC) + _ttl(),
         )
     )
@@ -281,6 +292,7 @@ async def complete(runner: str, lease_id: uuid.UUID, body: dict[str, Any]) -> No
                 abort_reason=body.get("abort_reason"),
                 generator_health=body.get("generator_health") or {},
                 usage={k: int(v) for k, v in (body.get("usage") or {}).items()},
+                sandbox_report=(body.get("result") or {}).get("sandbox"),
             )
             await audit.record(
                 session,

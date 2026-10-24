@@ -35,6 +35,7 @@ UPLOADS = {
         "log_bundle:runner.log",
     ],
 }
+SANDBOX_UPLOADS = ["log_bundle:sandbox.log", "telemetry_snapshot:sandbox.json"]
 LIMITS = {
     "load": {"cpu": 4, "mem_gb": 8, "pids": 4096},
     "functional": {"cpu": 2, "mem_gb": 4, "pids": 2048},
@@ -59,13 +60,31 @@ async def build_run_spec(
     if suite is not None:
         for part in suites.BUNDLE_PARTS:
             bundles[part] = artifacts.download_url(await suites.bundle_artifact(session, suite, part), ttl=1800)
+    names = list(UPLOADS[run.kind])
+    sandbox = None
+    if run.environment_kind == "sandbox_build":
+        from reliability.modules.environments import service as environments
+
+        ref = run.build_ref or {}
+        names += SANDBOX_UPLOADS
+        sandbox = await environments.sandbox_lease_section(
+            session,
+            org_id=run.org_id,
+            project_id=run.project_id,
+            archive_artifact_id=ref["archive_artifact_id"],
+            plan=ref["plan"],
+            runner_id=runner_id,
+            runner_public_key=runner_public_key,
+            subject_id=run.id,
+            ttl=int(cfg.get("max_wall_s", 1800)) + 3600,
+        )
     uploads = {
         name: store.presign_put(
             upload_key(run, name),
             ttl=cfg.get("max_wall_s", 1800) + 1800,
             content_type=CONTENT_TYPES.get("." + name.rsplit(".", 1)[-1], "application/octet-stream"),
         )
-        for name in UPLOADS[run.kind]
+        for name in names
     }
     secret_values = await secrets.resolve_for_run(
         session, Actor("runner", runner_id), run.org_id, run.project_id, set(cfg.get("secret_names") or []), run.id
@@ -105,4 +124,5 @@ async def build_run_spec(
             ),
         },
         "heartbeat_interval_s": 3,
+        "sandbox": sandbox,
     }

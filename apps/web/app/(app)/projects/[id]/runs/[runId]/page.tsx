@@ -7,6 +7,7 @@ import { useState } from "react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { LiveRun } from "@/components/runs/LiveRun";
 import { RunCharts } from "@/components/runs/RunCharts";
+import { PlanView, ReportView } from "@/components/sandbox/SandboxDetails";
 import { Badge, Button, Card, ErrorNote, fmtDate, StateView, Table } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
 import { openArtifact } from "@/lib/download";
@@ -108,6 +109,16 @@ export default function RunDetail() {
                     </tr>
                   ))}
                 </Table>
+              </Card>
+            )}
+            {r.environment_kind === "sandbox_build" && r.build_ref && (
+              <Card title="Sandbox">
+                <div className="space-y-4">
+                  {(r.build_ref.report as Record<string, unknown> | undefined) && <ReportView report={r.build_ref.report as Record<string, unknown>} />}
+                  {(r.build_ref.plan as Record<string, unknown> | undefined) ? (
+                    <details><summary className="cursor-pointer text-sm font-medium">Build plan</summary><div className="mt-2"><PlanView plan={r.build_ref.plan as Record<string, unknown>} /></div></details>
+                  ) : <p className="text-sm text-[var(--muted)]">Preparing the sandbox (fetching source and planning the build)…</p>}
+                </div>
               </Card>
             )}
             {finished && r.kind !== "load" && <Card title="Results"><pre className="max-h-96 overflow-auto text-xs">{JSON.stringify(r.summary, null, 2)}</pre></Card>}

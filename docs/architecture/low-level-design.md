@@ -173,6 +173,14 @@ generated synthetic seed). External HTTP dependencies are routed to a stub serve
 and Python; `postgres_exporter` with `pg_stat_statements`, cAdvisor and Redis exporter
 provide resource evidence.
 
+> **As built (Phase 6, see plan.md deviations):** plans come from
+> `reliability.modules.environments.plan` (compose → Dockerfile → template); a sandboxed run
+> is a single lease (build → start → migrate/seed → health → test → collect → teardown);
+> the runner implements `runner_agent.sandbox_env` with a Docker/gVisor sandbox (hardened
+> compose project, per-job BuildKit builder behind the package-mirror proxy) and a process
+> sandbox for local development and tests. Database evidence is collected by SQL snapshots
+> and connection sampling into the run's sandbox report.
+
 ## 6. Workflow IR
 
 The single structured representation from which tests are generated (ADR-0013). JSON,

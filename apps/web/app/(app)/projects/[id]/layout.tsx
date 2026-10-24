@@ -11,6 +11,7 @@ const TABS = [
   ["", "Overview"],
   ["/targets", "Targets"],
   ["/repository", "Repository"],
+  ["/sandbox", "Sandbox"],
   ["/discovery", "Discovery"],
   ["/workflows", "Workflows"],
   ["/suites", "Test suites"],

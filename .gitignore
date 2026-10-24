@@ -39,3 +39,4 @@ build/
 .DS_Store
 benchmarks/out/
 dump.rdb
+!runners/images/build/

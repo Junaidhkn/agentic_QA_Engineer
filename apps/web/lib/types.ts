@@ -30,6 +30,7 @@ export type IngestTokenCreated = S["IngestTokenCreated"];
 export type Discovery = S["DiscoveryOut"];
 export type OpenApiSpec = S["OpenAPIOut"];
 export type SourceArchive = S["ArchiveOut"];
+export type SandboxBuild = S["BuildOut"];
 export interface CoverageCounts { discovered?: number; approved?: number; tested?: number; passing?: number }
 export interface Coverage {
   totals: Required<CoverageCounts>;

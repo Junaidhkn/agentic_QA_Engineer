@@ -57,9 +57,9 @@ def proxy_args(config: Config, job_id: str, acl_path: Path) -> list[str]:
         f"{acl_path}:/etc/smokescreen/acl.yaml:ro",
         config.egress_proxy_image,
         "--listen-ip",
-        "0.0.0.0",
+        "0.0.0.0",  # noqa: S104 - inside the proxy container
         "--listen-port",
-        str(PROXY_PORT),  # noqa: S104 - inside the proxy container
+        str(PROXY_PORT),
         "--egress-acl-file",
         "/etc/smokescreen/acl.yaml",
     ]

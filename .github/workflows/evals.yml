@@ -26,11 +26,19 @@ concurrency:
 jobs:
   evals:
     runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16.6
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-retries 20
     defaults:
       run:
         working-directory: services/control-plane
     env:
       RE_ENV: test
+      RA_SANDBOX_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
@@ -44,7 +52,7 @@ jobs:
         run: npm install --no-audit --no-fund
         working-directory: benchmarks/reference-apps/express-notes
       - name: Deterministic baseline
-        run: uv run python ../../benchmarks/harness/run_evals.py --out ../../benchmarks/out/baseline
+        run: uv run python ../../benchmarks/harness/run_evals.py --sandbox --out ../../benchmarks/out/baseline
       - name: With model
         if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
         env:

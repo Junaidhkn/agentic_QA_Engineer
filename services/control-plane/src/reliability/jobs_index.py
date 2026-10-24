@@ -2,6 +2,7 @@
 
 from reliability.modules.audit import jobs as _audit_jobs  # noqa: F401
 from reliability.modules.discovery import jobs as _discovery_jobs  # noqa: F401
+from reliability.modules.environments import jobs as _environments_jobs  # noqa: F401
 from reliability.modules.findings import jobs as _findings_jobs  # noqa: F401
 from reliability.modules.runners import jobs as _runners_jobs  # noqa: F401
 from reliability.modules.runs import jobs as _runs_jobs  # noqa: F401

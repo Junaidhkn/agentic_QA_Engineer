@@ -178,3 +178,4 @@ resource "aws_autoscaling_policy" "queue_depth" {
 
 output "runner_security_group_id" { value = aws_security_group.runner.id }
 output "asg_name" { value = aws_autoscaling_group.runner.name }
+output "runner_role_name" { value = aws_iam_role.runner.name }

@@ -10,7 +10,7 @@ import { Badge, Button, Card, ErrorNote, Field, fmtDate, Select, StateView, Tabl
 import { apiFetch, newIdempotencyKey } from "@/lib/api";
 import { hasRole } from "@/lib/org";
 import { useProject } from "@/lib/project";
-import type { Profile, Run, Target } from "@/lib/types";
+import type { LinkedRepo, Profile, Run, SandboxBuild, Target } from "@/lib/types";
 
 export default function RunsPage() {
   const { id, role } = useProject();
@@ -21,19 +21,27 @@ export default function RunsPage() {
   const profiles = useQuery({ queryKey: ["profiles", id], queryFn: () => apiFetch<Profile[]>(`/v1/projects/${id}/load-profiles`) });
   const [kind, setKind] = useState("functional");
   const [targetId, setTargetId] = useState("");
+  const repo = useQuery({ queryKey: ["repo", id], queryFn: () => apiFetch<LinkedRepo | null>(`/v1/projects/${id}/repository`) });
+  const builds = useQuery({ queryKey: ["sandbox-builds", id], queryFn: () => apiFetch<SandboxBuild[]>(`/v1/projects/${id}/sandbox-builds`) });
+  const archiveId = (builds.data ?? []).map((b) => b.source.archive_artifact_id as string | undefined).find(Boolean);
+  const sandboxSource = repo.data ? { commit_ref: repo.data.default_branch } : archiveId ? { archive_artifact_id: archiveId } : null;
+  const useSandbox = targetId === "sandbox";
   const [profileId, setProfileId] = useState("");
   const [confirming, setConfirming] = useState(false);
   const verified = (targets.data ?? []).filter((t) => t.status === "verified");
-  const target = verified.find((t) => t.id === targetId) ?? verified[0];
+  const target = useSandbox ? undefined : verified.find((t) => t.id === targetId) ?? verified[0];
   const profile = (profiles.data ?? []).find((p) => p.id === profileId) ?? profiles.data?.[0];
   const start = useMutation({
     mutationFn: () => apiFetch<Run>(`/v1/projects/${id}/runs`, {
       method: "POST", idempotencyKey: newIdempotencyKey(),
-      body: JSON.stringify({ kind, load_profile_id: kind === "load" ? profile?.id : undefined, environment: { type: "target_url", target_id: target?.id } }),
+      body: JSON.stringify({
+        kind, load_profile_id: kind === "load" ? profile?.id : undefined,
+        environment: useSandbox ? { type: "sandbox_build", ...sandboxSource } : { type: "target_url", target_id: target?.id },
+      }),
     }),
     onSuccess: (r) => { setConfirming(false); qc.invalidateQueries({ queryKey: ["runs", id] }); router.push(`/projects/${id}/runs/${r.id}`); },
   });
-  const canRun = hasRole(role, "engineer") && target && (kind !== "load" || profile);
+  const canRun = hasRole(role, "engineer") && (useSandbox ? sandboxSource : target) && (kind !== "load" || profile);
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
@@ -68,8 +76,11 @@ export default function RunsPage() {
                 <option value="probe">Concurrency probes (race conditions)</option>
               </Select>
             </Field>
-            <Field label="Target" hint={verified.length ? undefined : "Verify a target first."}>
-              <Select value={target?.id ?? ""} onChange={(e) => setTargetId(e.target.value)}>{verified.map((t) => <option key={t.id} value={t.id}>{t.host} ({t.environment})</option>)}</Select>
+            <Field label="Environment" hint={useSandbox ? "The app is built from source and started with its database in an isolated sandbox; no traffic leaves it." : verified.length ? undefined : "Verify a target, or run in a sandbox."}>
+              <Select value={useSandbox ? "sandbox" : target?.id ?? ""} onChange={(e) => setTargetId(e.target.value)}>
+                {verified.map((t) => <option key={t.id} value={t.id}>{t.host} ({t.environment})</option>)}
+                <option value="sandbox" disabled={!sandboxSource}>Sandbox built from {repo.data ? `${repo.data.full_name}@${repo.data.default_branch}` : "the last uploaded source"}</option>
+              </Select>
             </Field>
             {kind === "load" && (
               <Field label="Load profile">
@@ -82,7 +93,7 @@ export default function RunsPage() {
         </Card>
       )}
       <ConfirmDialog open={confirming} title="Start this run?" confirmLabel="Start run" busy={start.isPending} onCancel={() => setConfirming(false)} onConfirm={() => start.mutate()}>
-        <p><strong>Target:</strong> {target?.host} ({target?.environment})</p>
+        <p><strong>Environment:</strong> {useSandbox ? "sandbox built from source" : `${target?.host} (${target?.environment})`}</p>
         <p><strong>Kind:</strong> {kind}</p>
         {kind === "load" && profile && <p><strong>Load:</strong> {profile.type}, up to {profile.max_vus} virtual users for {Math.round(profile.duration_s / 60)} min</p>}
         <p className="text-[var(--muted)]">Traffic comes only from our published egress IPs and stops within seconds when you press Stop. First load tests and runs above 500 users need an admin&apos;s approval.</p>

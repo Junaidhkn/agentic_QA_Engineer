@@ -10,8 +10,10 @@ import hashlib
 import io
 import json
 import logging
+import math
 import shutil
 import tarfile
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -21,10 +23,14 @@ from runner_agent.config import Config
 from runner_agent.drivers.base import CommandSpec, Driver, Egress, Handle, Limits
 from runner_agent.k6stream import K6Aggregator
 from runner_agent.keys import RunnerKeys
+from runner_agent.sandbox_env.base import Sandbox, SandboxError, extract_source
+from runner_agent.sandbox_env.docker import DockerSandbox
+from runner_agent.sandbox_env.process import ProcessSandbox
 
 log = logging.getLogger(__name__)
 CONTENT_TYPES = {".json": "application/json", ".gz": "application/gzip", ".log": "text/plain"}
 K6_ABORT_EXIT = 105
+SANDBOX_SAMPLE_S = 5.0
 
 
 @dataclass
@@ -65,15 +71,29 @@ class JobRunner:
         state = JobState()
         hb = asyncio.create_task(self._heartbeats(lease, state))
         outcome, error = "succeeded", None
+        sandbox: Sandbox | None = None
+        sampler: asyncio.Task[None] | None = None
+        sandbox_started = 0.0
         try:
             secrets = self.keys.unseal(lease["secrets_sealed"]) if lease.get("secrets_sealed") else {}
             spec_egress = lease.get("egress") or {}
             egress = Egress(spec_egress.get("allow_hosts", []), spec_egress.get("allow_ips", []))
             await self.driver.prepare(lease_id, egress)
             await self._fetch_bundles(lease, workdir)
-            state.phase = "running"
             limits = Limits(**lease.get("limits", {}))
             env = dict(lease.get("env", {}))
+            if lease.get("sandbox"):
+                sandbox_started = time.monotonic()
+                sandbox = await self._make_sandbox(lease, workdir)
+                state.phase = "building"
+                log.info("sandbox build", extra={"lease_id": lease_id})
+                await sandbox.build()
+                state.phase = "starting"
+                log.info("sandbox start", extra={"lease_id": lease_id})
+                env["BASE_URL"] = await sandbox.start()
+                log.info("sandbox healthy at %s", env["BASE_URL"], extra={"lease_id": lease_id})
+                sampler = asyncio.create_task(self._sample(sandbox))
+            state.phase = "running"
             job_type = lease["job_type"]
             work = self._dispatch(job_type, lease, workdir, env, secrets, limits, state)
             try:
@@ -85,14 +105,25 @@ class JobRunner:
                 outcome = "cancelled"
             elif state.abort_reason:
                 outcome = "aborted"
+        except SandboxError as exc:
+            outcome, error = "error", f"sandbox {exc.phase}: {exc.message}"[:480]
+            if sandbox is not None:
+                sandbox.report.error, sandbox.report.error_phase = exc.message[:2000], exc.phase
         except Exception as exc:  # report, never crash the agent
             log.exception("job failed", extra={"lease_id": lease_id})
             outcome, error = "error", f"{type(exc).__name__}: {exc}"[:480]
         finally:
             hb.cancel()
+            if sampler is not None:
+                sampler.cancel()
+            if sandbox is not None:
+                await self._finish_sandbox(sandbox, workdir, state, sandbox_started)
             with contextlib.suppress(Exception):
                 await self.driver.teardown(lease_id)
         artifacts = await self._upload(lease, workdir, state)
+        usage = {"vu_minutes": state.vu_minutes}
+        if sandbox_started:
+            usage["sandbox_minutes"] = max(1, math.ceil((time.monotonic() - sandbox_started) / 60))
         await self.client.complete(
             lease_id,
             {
@@ -100,7 +131,7 @@ class JobRunner:
                 "abort_reason": error or state.abort_reason,
                 "exit_codes": state.exit_codes,
                 "artifacts": artifacts,
-                "usage": {"vu_minutes": state.vu_minutes},
+                "usage": usage,
                 "generator_health": {
                     "max_cpu": round(state.max_cpu, 3),
                     "avg_cpu": round(sum(state.cpu_samples) / len(state.cpu_samples), 3) if state.cpu_samples else None,
@@ -110,6 +141,45 @@ class JobRunner:
             },
         )
         shutil.rmtree(workdir, ignore_errors=True)
+
+    # ------------------------------------------------------------ sandbox ----
+    async def _make_sandbox(self, lease: dict[str, Any], workdir: Path) -> Sandbox:
+        section = lease["sandbox"]
+        try:
+            data = await self.client.download(section["source_url"])
+            src = extract_source(data, workdir / "src")
+        except Exception as exc:
+            raise SandboxError("source", f"could not fetch the source archive ({type(exc).__name__})") from exc
+        app_env = self.keys.unseal(section["app_secrets_sealed"]) if section.get("app_secrets_sealed") else {}
+        log_path = workdir / "sandbox.log"
+        args = (self.config, lease["lease_id"], src, section["plan"], app_env, lease.get("otlp"), log_path)
+        if self.config.driver == "docker":
+            return DockerSandbox(*args, project_id=lease.get("project_id", "default"), run_id=lease.get("run_id"))
+        return ProcessSandbox(*args, run_id=lease.get("run_id"))
+
+    async def _sample(self, sandbox: Sandbox) -> None:
+        while True:
+            await sandbox.sample()
+            await asyncio.sleep(SANDBOX_SAMPLE_S)
+
+    async def _finish_sandbox(self, sandbox: Sandbox, workdir: Path, state: JobState, started: float) -> None:
+        log.info("sandbox teardown (healthy=%s)", sandbox.report.healthy)
+        with contextlib.suppress(Exception):
+            if sandbox.report.healthy:
+                await sandbox.collect()
+        with contextlib.suppress(Exception):
+            await sandbox.stop()
+        sandbox.report.phases["total"] = round(time.monotonic() - started, 2)
+        report_path = workdir / "sandbox.json"
+        report_path.write_text(json.dumps(sandbox.report.to_dict(), default=str))
+        state.result["sandbox"] = sandbox.report.to_dict()
+        state.outputs["telemetry_snapshot:sandbox.json"] = report_path
+        if (workdir / "sandbox.log").exists():
+            state.outputs["log_bundle:sandbox.log"] = workdir / "sandbox.log"
+
+    async def _run_sandbox_build(self, *_: Any) -> None:
+        """Standalone buildability check: the sandbox was built, started and found healthy."""
+        return None
 
     def _dispatch(
         self,
@@ -129,6 +199,8 @@ class JobRunner:
             return self._run_probes(lease, workdir, env, secrets, limits, state)
         if job_type == "test_validation":
             return self._run_validation(lease, workdir, env, secrets, limits, state)
+        if job_type == "sandbox_build":
+            return self._run_sandbox_build()
         raise ValueError(f"unsupported job type {job_type}")
 
     # ------------------------------------------------------------ helpers ----

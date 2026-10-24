@@ -46,6 +46,24 @@ module "execution_plane" {
   runner_token_secret_arn        = var.runner_token_secret_arn
 }
 
+module "package_mirror" {
+  source                     = "../../modules/package-mirror"
+  name                       = "re-prod"
+  vpc_id                     = module.exec_network.vpc_id
+  private_subnet_ids         = module.exec_network.private_subnet_ids
+  runner_role_name           = module.execution_plane.runner_role_name
+  allowed_security_group_ids = [module.execution_plane.runner_security_group_id]
+}
+
+output "package_mirror" {
+  description = "RA_PIP_INDEX_URL / RA_NPM_REGISTRY / RA_MIRROR_HOSTS for runner hosts"
+  value = {
+    pip_index_url = module.package_mirror.pip_index_url
+    npm_registry  = module.package_mirror.npm_registry
+    mirror_hosts  = module.package_mirror.mirror_hosts
+  }
+}
+
 output "egress_ips" {
   description = "Publish these (RE_EGRESS_IPS) so customers can allowlist test traffic"
   value       = module.exec_network.egress_ips
