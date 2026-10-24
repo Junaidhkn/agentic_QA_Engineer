@@ -75,7 +75,11 @@ async def create(session: AsyncSession, principal: Principal, project: Project, 
         async with session.begin_nested():
             await session.flush()
     except IntegrityError as exc:
-        raise AppError("CONFLICT", "a profile with this name already exists") from exc
+        if getattr(exc.orig, "sqlstate", None) == "23505":  # unique (project_id, name)
+            raise AppError("CONFLICT", "a profile with this name already exists") from exc
+        raise AppError(
+            "VALIDATION_FAILED", "profile values out of range (duration 10–3600 s, 1–1000 VUs, think time min ≤ max)"
+        ) from exc
     await audit.record(
         session,
         principal.actor,

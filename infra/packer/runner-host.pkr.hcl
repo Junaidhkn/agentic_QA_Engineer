@@ -45,7 +45,20 @@ build {
       "sudo systemctl enable docker && sudo systemctl start docker",
       "sudo docker pull ${var.k6_image} && sudo docker pull ${var.playwright_image}",
       "sudo docker pull ${var.egress_proxy_image} && sudo docker pull ${var.runner_agent_image}",
-      "printf '[Unit]\\nAfter=docker.service\\n[Service]\\nEnvironmentFile=/etc/runner-agent.env\\nExecStart=/usr/bin/docker run --rm --name runner-agent --env-file /etc/runner-agent.env -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/runner:/var/lib/runner ${var.runner_agent_image}\\nRestart=always\\n[Install]\\nWantedBy=multi-user.target\\n' | sudo tee /etc/systemd/system/runner-agent.service",
+    ]
+  }
+  # Runner agent unit (graceful drain on stop) and the host agent (slot metrics, lifecycle drain).
+  provisioner "file" {
+    sources     = ["files/runner-agent.service", "files/runner-host-agent.service", "files/runner-host-agent.sh"]
+    destination = "/tmp/"
+  }
+  provisioner "shell" {
+    inline = [
+      "sudo install -m 0644 /tmp/runner-agent.service /tmp/runner-host-agent.service /etc/systemd/system/",
+      "sudo install -m 0755 /tmp/runner-host-agent.sh /usr/local/bin/runner-host-agent.sh",
+      "sudo mkdir -p /etc/systemd/system/runner-agent.service.d",
+      "printf '[Service]\\nEnvironment=RUNNER_AGENT_IMAGE=${var.runner_agent_image}\\n' | sudo tee /etc/systemd/system/runner-agent.service.d/image.conf",
+      "sudo systemctl daemon-reload",
     ]
   }
 }

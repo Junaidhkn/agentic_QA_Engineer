@@ -5,6 +5,7 @@ Every variable is documented in the repository root ``.env.example``.
 
 from __future__ import annotations
 
+import uuid
 from functools import lru_cache
 from typing import Literal
 
@@ -109,6 +110,16 @@ class Settings(BaseSettings):
     # Error tracking
     sentry_dsn: str | None = None
 
+    # Platform operations (operations §6, §7)
+    # /metrics on the API needs this bearer token (local/test: open when unset); workers
+    # serve their own endpoint on metrics_port.
+    metrics_token: SecretStr | None = None
+    metrics_port: int | None = None
+    # Synthetic canary: a dedicated org/project with a verified reference-app target.
+    canary_project_id: uuid.UUID | None = None
+    canary_target_id: uuid.UUID | None = None
+    canary_max_age_s: int = 1800
+
     @model_validator(mode="after")
     def _guard_production(self) -> Settings:
         if self.env in ("staging", "production"):
@@ -127,6 +138,8 @@ class Settings(BaseSettings):
                 insecure.append("RE_KMS must be aws")
             if self.llm_provider == "fake":
                 insecure.append("RE_LLM_PROVIDER must not be fake")
+            if self.metrics_token is None:
+                insecure.append("RE_METRICS_TOKEN must be set")
             if insecure:
                 raise ValueError("insecure configuration for " + self.env + ": " + "; ".join(insecure))
         return self

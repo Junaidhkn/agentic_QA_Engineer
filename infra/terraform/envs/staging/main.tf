@@ -1,4 +1,4 @@
-# Staging execution plane (account B). Control-plane resources are added in Phase 10.
+# Staging execution plane (account B). The control plane (account A) is envs/staging-control-plane.
 terraform {
   required_version = ">= 1.9"
   required_providers {

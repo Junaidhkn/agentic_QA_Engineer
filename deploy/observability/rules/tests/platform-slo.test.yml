@@ -1,0 +1,147 @@
+# promtool test rules deploy/observability/rules/tests/platform-slo.test.yml
+rule_files:
+  - ../platform-slo.rules.yml
+
+evaluation_interval: 30s
+
+tests:
+  # A 5% error rate burns 50× the 0.1% budget: the fast-burn page fires; 0.05% does not.
+  - interval: 1m
+    input_series:
+      - series: 're_http_requests_total{method="GET",route="/v1/runs/{run_id}",status="2xx"}'
+        values: "0+950x70"
+      - series: 're_http_requests_total{method="GET",route="/v1/runs/{run_id}",status="5xx"}'
+        values: "0+50x70"
+    alert_rule_test:
+      - eval_time: 65m
+        alertname: PlatformAvailabilityBudgetBurnFast
+        exp_alerts:
+          - exp_labels: { severity: page, slo: availability }
+            exp_annotations:
+              summary: "API 5xx rate is burning the 99.9% availability budget fast (2% in 1 h)"
+              runbook: docs/runbooks/README.md#triage
+
+  - interval: 1m
+    input_series:
+      - series: 're_http_requests_total{method="GET",route="/v1/runs/{run_id}",status="2xx"}'
+        values: "0+9995x70"
+      - series: 're_http_requests_total{method="GET",route="/v1/runs/{run_id}",status="5xx"}'
+        values: "0+5x70"
+    alert_rule_test:
+      - eval_time: 65m
+        alertname: PlatformAvailabilityBudgetBurnFast
+        exp_alerts: []
+
+  # Every job starting after 45 s: job-start SLO pages (business hours label); queue backlog tickets.
+  - interval: 1m
+    input_series:
+      - series: 're_job_start_seconds_bucket{job_type="load",le="30.0"}'
+        values: "0x70"
+      - series: 're_job_start_seconds_count{job_type="load"}'
+        values: "0+2x70"
+      - series: 're_queue_oldest_age_seconds{queue="run:load",instance="api-1"}'
+        values: "90x70"
+      - series: 're_queue_oldest_age_seconds{queue="run:load",instance="api-2"}'
+        values: "90x70"
+    alert_rule_test:
+      - eval_time: 65m
+        alertname: JobStartBudgetBurnFast
+        exp_alerts:
+          - exp_labels: { severity: page, slo: job_start, page_hours: business }
+            exp_annotations:
+              summary: "Most jobs take over 30 s to start — execution capacity or dispatch is failing"
+              runbook: docs/runbooks/runner-fleet-replacement.md
+      - eval_time: 10m
+        alertname: QueueBacklog
+        exp_alerts:
+          - exp_labels: { severity: ticket, slo: job_start, queue: "run:load" }
+            exp_annotations:
+              summary: "Oldest queued run:load has waited 1m 30s"
+
+  # One kill took longer than 10 s: page immediately.
+  - interval: 1m
+    input_series:
+      - series: 're_kill_latency_seconds_count{job_type="load"}'
+        values: "0 0 1 1 1"
+      - series: 're_kill_latency_seconds_bucket{job_type="load",le="10.0"}'
+        values: "0 0 0 0 0"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: KillLatencyBreach
+        exp_alerts:
+          - exp_labels: { severity: page, slo: kill_latency }
+            exp_annotations:
+              summary: "A cancelled job kept running for more than 10 s after its runner got the stop (NFR-7)"
+              runbook: docs/runbooks/kill-switch.md
+
+  # Kills within 10 s never alert.
+  - interval: 1m
+    input_series:
+      - series: 're_kill_latency_seconds_count{job_type="load"}'
+        values: "0 0 1 2 2"
+      - series: 're_kill_latency_seconds_bucket{job_type="load",le="10.0"}'
+        values: "0 0 1 2 2"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: KillLatencyBreach
+        exp_alerts: []
+
+  # Platform checks: canary stale/failing, restore drill, integrity, outbox.
+  - interval: 1m
+    input_series:
+      - series: 're_platform_check_last_success_timestamp_seconds{check="canary",instance="api-1"}'
+        values: "0x70"
+      - series: 're_platform_check_consecutive_failures{check="canary",instance="api-1"}'
+        values: "2x70"
+      - series: 're_platform_check_ok{check="canary",instance="api-1"}'
+        values: "0x70"
+      - series: 're_platform_check_ok{check="restore_drill",instance="api-1"}'
+        values: "0x70"
+      - series: 're_integrity_violations{invariant="cross_tenant_runs",instance="api-1"}'
+        values: "0x30 1x40"
+      - series: 're_integrity_violations{invariant="cross_tenant_runs",instance="api-2"}'
+        values: "0x30 1x40"
+      - series: 're_outbox_oldest_age_seconds{instance="api-1"}'
+        values: "5x10 45x10"
+    alert_rule_test:
+      - eval_time: 65m
+        alertname: CanaryStale
+        exp_alerts:
+          - exp_labels: { severity: page }
+            exp_annotations:
+              summary: "No successful synthetic canary for over an hour"
+              runbook: docs/runbooks/README.md#canary
+      - eval_time: 1m
+        alertname: CanaryFailing
+        exp_alerts:
+          - exp_labels: { severity: page }
+            exp_annotations:
+              summary: "Synthetic canary failed 2 times in a row (admission → runner → findings path)"
+              runbook: docs/runbooks/README.md#canary
+      - eval_time: 1m
+        alertname: RestoreDrillFailed
+        exp_alerts:
+          - exp_labels: { severity: page }
+            exp_annotations:
+              summary: "The last restore drill failed — backups may not be restorable"
+              runbook: docs/runbooks/rds-pitr-restore.md
+      - eval_time: 20m
+        alertname: IntegrityViolation
+        exp_alerts: []
+      - eval_time: 35m
+        alertname: IntegrityViolation
+        exp_alerts:
+          - exp_labels: { severity: page, invariant: cross_tenant_runs }
+            exp_annotations:
+              summary: "Platform invariant cross_tenant_runs has 1 violating row(s)"
+              runbook: docs/runbooks/cross-tenant-access-alarm.md
+      - eval_time: 9m
+        alertname: OutboxLag
+        exp_alerts: []
+      - eval_time: 14m
+        alertname: OutboxLag
+        exp_alerts:
+          - exp_labels: { severity: page }
+            exp_annotations:
+              summary: "Outbox relay is behind by 45s; new jobs are not starting"
+              runbook: docs/runbooks/README.md#outbox-relay

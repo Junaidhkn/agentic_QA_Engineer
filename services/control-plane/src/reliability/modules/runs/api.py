@@ -14,10 +14,11 @@ from reliability.modules.artifacts import service as artifacts
 from reliability.modules.identity.deps import CtxDep, get_principal
 from reliability.modules.identity.service import Principal
 from reliability.modules.projects import service as projects
+from reliability.modules.quotas import ratelimit
 from reliability.modules.runs import service
 from reliability.modules.runs.models import RunMetricSummary
 from reliability.modules.tenancy.policy import require
-from reliability.platform import idempotency
+from reliability.platform import idempotency, metrics
 from reliability.platform.settings import get_settings
 
 router = APIRouter(tags=["runs"])
@@ -150,6 +151,8 @@ async def create_run(
     payload = body.model_dump(mode="json")
     if cached := await idempotency.lookup(ctx.session, project.org_id, key, payload):
         return cached.to_response()
+    # Fails closed without Redis (operations §3): runs create real traffic.
+    await ratelimit.check(str(ctx.principal.user_id or ctx.principal.api_key_id), "run")
     run = await service.create_run(
         ctx.session,
         ctx.principal,
@@ -344,6 +347,7 @@ async def stream_events(
         after = int(last_event_id) if last_event_id and last_event_id.isdigit() else 0
         pubsub = get_redis().pubsub()
         await pubsub.subscribe(f"run:{run_id}")
+        metrics.SSE_CONNECTIONS.inc()
         try:
             async with tenant_tx(org_ids=org_ids) as session:
                 for e in await service.events_since(session, run_id, after):
@@ -372,6 +376,7 @@ async def stream_events(
                     yield frame(after, "end", {"status": data["payload"]["status"]})
                     return
         finally:
+            metrics.SSE_CONNECTIONS.dec()
             await pubsub.unsubscribe()
             await pubsub.aclose()
 

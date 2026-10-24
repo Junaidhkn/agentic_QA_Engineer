@@ -9,13 +9,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any
 
 from celery import Celery
 from celery.schedules import crontab
-from celery.signals import worker_process_init
+from celery.signals import worker_init, worker_process_init
 
-from reliability.platform import db
+from reliability.platform import db, metrics
+from reliability.platform.errors import is_rls_denial
 from reliability.platform.jobs import all_jobs, get_job
 from reliability.platform.logging import configure_logging
 from reliability.platform.settings import get_settings
@@ -56,8 +58,20 @@ celery_app.conf.update(
             "args": ["maintenance.partitions", {}],
             "schedule": crontab(minute=15, hour=1),
         },
+        "integrity": {
+            "task": "reliability.run_job",
+            "args": ["ops.integrity", {}],
+            "schedule": crontab(minute=41),
+        },
+        "canary": {"task": "reliability.run_job", "args": ["ops.canary", {}], "schedule": 900.0},
     },
 )
+
+
+@worker_init.connect
+def _init_metrics(**_: Any) -> None:
+    if settings.metrics_port:
+        metrics.start_worker_endpoint(settings.metrics_port)
 
 
 @worker_process_init.connect
@@ -69,9 +83,15 @@ def _init_worker(**_: Any) -> None:
 @celery_app.task(name="reliability.run_job", bind=True, max_retries=5)
 def run_job(self: Any, topic: str, payload: dict[str, Any]) -> None:
     spec = get_job(topic)
+    done = metrics.timed_job(topic)
+    started = time.perf_counter()
     try:
         asyncio.run(_run(spec.handler, payload))
+        done(time.perf_counter() - started, True)
     except Exception as exc:
+        done(time.perf_counter() - started, False)
+        if is_rls_denial(exc):
+            metrics.RLS_DENIALS.inc()
         log.exception("job failed", extra={"topic": topic, "retries": self.request.retries})
         if self.request.retries >= spec.max_retries:
             raise

@@ -9,6 +9,11 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+variable "create_data_subnets" {
+  type        = bool
+  default     = false
+  description = "Isolated subnets (no internet route) for RDS and ElastiCache"
+}
 
 resource "aws_vpc" "this" {
   cidr_block           = var.cidr
@@ -83,6 +88,26 @@ resource "aws_route_table_association" "private" {
   route_table_id = aws_route_table.private[count.index].id
 }
 
+resource "aws_subnet" "data" {
+  count             = var.create_data_subnets ? length(var.azs) : 0
+  vpc_id            = aws_vpc.this.id
+  availability_zone = var.azs[count.index]
+  cidr_block        = cidrsubnet(var.cidr, 4, count.index + 4)
+  tags              = merge(var.tags, { Name = "${var.name}-data-${var.azs[count.index]}", Tier = "data" })
+}
+
+resource "aws_route_table" "data" {
+  count  = var.create_data_subnets ? 1 : 0
+  vpc_id = aws_vpc.this.id
+  tags   = merge(var.tags, { Name = "${var.name}-data" })
+}
+
+resource "aws_route_table_association" "data" {
+  count          = var.create_data_subnets ? length(var.azs) : 0
+  subnet_id      = aws_subnet.data[count.index].id
+  route_table_id = aws_route_table.data[0].id
+}
+
 resource "aws_flow_log" "this" {
   vpc_id               = aws_vpc.this.id
   traffic_type         = "ALL"
@@ -120,3 +145,5 @@ output "vpc_id" { value = aws_vpc.this.id }
 output "public_subnet_ids" { value = aws_subnet.public[*].id }
 output "private_subnet_ids" { value = aws_subnet.private[*].id }
 output "egress_ips" { value = aws_eip.nat[*].public_ip }
+output "data_subnet_ids" { value = aws_subnet.data[*].id }
+output "cidr" { value = var.cidr }

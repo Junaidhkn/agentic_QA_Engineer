@@ -23,6 +23,7 @@ from reliability.modules.targets import service as targets
 from reliability.modules.targets.models import Target
 from reliability.modules.tenancy.models import Organization
 from reliability.modules.tenancy.policy import require
+from reliability.platform import metrics
 from reliability.platform.errors import AppError
 from reliability.platform.flags import kill_switch_active
 
@@ -63,6 +64,14 @@ async def _first_load_run(session: AsyncSession, target_id: uuid.UUID) -> bool:
 
 
 async def admit(session: AsyncSession, principal: Principal | None, req: RunRequest) -> Admission:
+    try:
+        return await _admit(session, principal, req)
+    except AppError as exc:
+        metrics.ADMISSION_REJECTIONS.labels(exc.code).inc()
+        raise
+
+
+async def _admit(session: AsyncSession, principal: Principal | None, req: RunRequest) -> Admission:
     if not req.system:
         assert principal is not None
         require(principal, req.org_id, "engineer", scope="runs:write", project_id=req.project_id)

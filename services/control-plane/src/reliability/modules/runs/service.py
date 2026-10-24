@@ -25,7 +25,7 @@ from reliability.modules.quotas import service as quotas
 from reliability.modules.runs.models import ACTIVE_STATUSES, TERMINAL_STATUSES, Run, RunEvent, RunnerLease
 from reliability.modules.targets import service as targets
 from reliability.modules.testsuites import service as suites
-from reliability.platform import outbox
+from reliability.platform import metrics, outbox
 from reliability.platform.actor import SYSTEM, Actor
 from reliability.platform.db import system_tx
 from reliability.platform.errors import AppError
@@ -71,6 +71,10 @@ async def transition(session: AsyncSession, run: Run, to: str, reason: str | Non
     old = run.status
     for k, v in values.items():
         setattr(run, k, v)
+    if to == "running" and run.queued_at is not None and run.environment_kind == "target_url":
+        # NFR-4 job start: queued → first test container running. Sandbox runs are measured at
+        # lease time instead (runners.service), since build time is excluded from "start".
+        metrics.observe_job_start(run.kind, (now - run.queued_at).total_seconds())
     await add_event(session, run, "status", {"status": to, "from": old, "reason": reason})
     return True
 

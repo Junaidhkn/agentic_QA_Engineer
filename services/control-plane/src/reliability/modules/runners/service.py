@@ -26,6 +26,7 @@ from reliability.modules.runs import service as runs
 from reliability.modules.runs.models import ExecutionJob, Run, RunnerLease
 from reliability.modules.targets.models import Target
 from reliability.modules.tenancy.models import Organization
+from reliability.platform import metrics
 from reliability.platform.actor import SYSTEM, Actor
 from reliability.platform.db import system_tx
 from reliability.platform.errors import AppError
@@ -139,6 +140,8 @@ async def _lease_run(session: AsyncSession, run: Run, runner: str, public_key: s
         )
     )
     await runs.transition(session, run, "provisioning", f"leased by {runner}")
+    if run.environment_kind == "sandbox_build" and run.queued_at is not None:
+        metrics.observe_job_start(f"{run.kind}_sandbox", (datetime.now(UTC) - run.queued_at).total_seconds())
     await audit.record(
         session,
         Actor("runner", runner),
@@ -186,6 +189,7 @@ async def _lease_job(session: AsyncSession, job: ExecutionJob, runner: str, publ
         )
     )
     job.status = "leased"
+    metrics.observe_job_start(job.job_type, (datetime.now(UTC) - job.queued_at).total_seconds())
     return spec
 
 
@@ -281,6 +285,9 @@ async def complete(runner: str, lease_id: uuid.UUID, body: dict[str, Any]) -> No
         lease = await _active_lease(session, lease_id, runner)
         lease.state = "completed" if body.get("outcome") != "error" else "failed"
         lease.finished_at = datetime.now(UTC)
+        kill = (body.get("generator_health") or {}).get("kill_latency_s")
+        if isinstance(kill, int | float):
+            metrics.KILL_LATENCY.labels(lease.job_type).observe(float(kill))
         if lease.job_type in RUN_JOB_TYPES:
             run = await session.get(Run, lease.subject_id, with_for_update=True)
             assert run is not None
@@ -330,6 +337,7 @@ async def reap_expired() -> int:
         for lease in leases:
             lease.state, lease.finished_at = "expired", datetime.now(UTC)
             reaped += 1
+            metrics.LEASES_EXPIRED.labels(lease.job_type).inc()
             if lease.job_type in RUN_JOB_TYPES:
                 run = await session.get(Run, lease.subject_id, with_for_update=True)
                 if run is not None and run.status in ("provisioning", "running", "cancelling"):

@@ -1,0 +1,15 @@
+[Unit]
+Description=Reliability Engineer runner agent
+After=docker.service
+Requires=docker.service
+
+[Service]
+EnvironmentFile=/etc/runner-agent.env
+# On stop the agent takes no new leases and finishes active jobs (≤ max wall clock + slack).
+ExecStart=/usr/bin/docker run --rm --name runner-agent --stop-timeout 3900 --env-file /etc/runner-agent.env -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/runner:/var/lib/runner ${RUNNER_AGENT_IMAGE}
+ExecStop=/usr/bin/docker stop --time 3900 runner-agent
+TimeoutStopSec=3960
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

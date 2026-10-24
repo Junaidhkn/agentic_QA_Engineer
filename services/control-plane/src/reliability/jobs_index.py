@@ -6,6 +6,7 @@ from reliability.modules.discovery import jobs as _discovery_jobs  # noqa: F401
 from reliability.modules.environments import checks as _environment_checks  # noqa: F401
 from reliability.modules.environments import jobs as _environments_jobs  # noqa: F401
 from reliability.modules.findings import jobs as _findings_jobs  # noqa: F401
+from reliability.modules.ops import jobs as _ops_jobs  # noqa: F401
 from reliability.modules.repairs import jobs as _repairs_jobs  # noqa: F401
 from reliability.modules.reports import jobs as _reports_jobs  # noqa: F401
 from reliability.modules.runners import jobs as _runners_jobs  # noqa: F401

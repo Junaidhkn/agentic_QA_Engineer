@@ -23,6 +23,8 @@ It never claims complete coverage or guaranteed fixes, never merges, and never d
 | `examples/ci/` | CI gating: a portable script and a GitHub Actions example that fail a build on a failed verdict |
 | `infra/` | Terraform (AWS) and Packer (runner hosts) |
 | `deploy/local/` | docker-compose stack for local development |
+| `deploy/observability/` | Platform SLO rules (burn-rate alerts, promtool-tested) and Grafana dashboard |
+| `docs/runbooks/` | Operator runbooks, game-day plan |
 
 ## Quick start (local)
 

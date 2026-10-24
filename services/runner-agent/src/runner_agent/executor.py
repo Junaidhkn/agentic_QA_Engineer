@@ -47,6 +47,9 @@ class JobState:
     vu_minutes: int = 0
     result: dict[str, Any] = field(default_factory=dict)
     sandbox: Sandbox | None = None
+    # NFR-7: cancel received (heartbeat reply) → tool stopped, reported to the control plane.
+    cancel_seen_at: float | None = None
+    stopped_at: float | None = None
 
 
 def _safe_extract(data: bytes, dest: Path) -> None:
@@ -97,6 +100,7 @@ class JobRunner:
                 sampler = asyncio.create_task(self._sample(sandbox))
                 state.sandbox = sandbox
             state.phase = "running"
+            await self._report_started(lease, state)
             job_type = lease["job_type"]
             work = self._dispatch(job_type, lease, workdir, env, secrets, limits, state)
             try:
@@ -139,6 +143,11 @@ class JobRunner:
                     "max_cpu": round(state.max_cpu, 3),
                     "avg_cpu": round(sum(state.cpu_samples) / len(state.cpu_samples), 3) if state.cpu_samples else None,
                     "driver": self.driver.name,
+                    **(
+                        {"kill_latency_s": round(state.stopped_at - state.cancel_seen_at, 3)}
+                        if state.cancel_seen_at is not None and state.stopped_at is not None
+                        else {}
+                    ),
                 },
                 "result": state.result,
             },
@@ -218,12 +227,26 @@ class JobRunner:
         for part, url in (lease.get("bundles") or {}).items():
             _safe_extract(await self.client.download(url), workdir / part)
 
+    async def _report_started(self, lease: dict[str, Any], state: JobState) -> None:
+        """Tell the control plane the first container is running now, not at the next periodic
+        heartbeat: short jobs finish within one interval and job start (NFR-4) is measured here."""
+        try:
+            reply = await self.client.heartbeat(lease["lease_id"], "running", None)
+        except Exception:
+            log.warning("start heartbeat failed", exc_info=True)
+            return
+        if reply.get("action") == "cancel":
+            state.cancel_seen_at = state.cancel_seen_at or time.monotonic()
+            state.cancelled.set()
+
     async def _heartbeats(self, lease: dict[str, Any], state: JobState) -> None:
         interval = float(lease.get("heartbeat_interval_s", 3))
         while True:
             try:
                 reply = await self.client.heartbeat(lease["lease_id"], state.phase, state.progress)
                 if reply.get("action") == "cancel":
+                    if state.cancel_seen_at is None:
+                        state.cancel_seen_at = time.monotonic()
                     state.cancelled.set()
             except Exception:
                 log.warning("heartbeat failed", exc_info=True)
@@ -245,6 +268,7 @@ class JobRunner:
                 tick()
             if state.cancelled.is_set() or state.abort_reason:
                 await handle.stop()
+                state.stopped_at = time.monotonic()
                 break
         return await waiter
 

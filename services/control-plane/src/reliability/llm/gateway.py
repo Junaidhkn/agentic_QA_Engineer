@@ -36,6 +36,7 @@ from reliability.llm.types import (
     UsageRecord,
     UsageSink,
 )
+from reliability.platform import metrics
 from reliability.platform.settings import Settings, get_settings
 
 log = logging.getLogger(__name__)
@@ -140,6 +141,7 @@ class Gateway:
         estimate = _estimate_tokens(safe) + max_tokens // 4
         if budget.remaining < estimate // 2 or not await sink.allow(org_id, estimate):
             await sink.record(UsageRecord(org_id, request.purpose, subject_id, model, 0, 0, 0, 0, "budget_denied"))
+            metrics.LLM_REQUESTS.labels(request.purpose, "budget_denied").inc()
             raise BudgetExhausted(f"token budget exhausted for {request.purpose}")
 
         last_error: Exception | None = None
@@ -150,12 +152,18 @@ class Gateway:
                 response = await self.client.complete(safe, model=model, effort=config.effort, max_tokens=max_tokens)
             except LLMUnavailable as exc:
                 last_error = exc
+                metrics.LLM_REQUESTS.labels(request.purpose, "unavailable").inc()
                 log.warning("llm unavailable", extra={"purpose": request.purpose, "attempt": attempt})
                 continue
             except LLMRefusal:
                 await sink.record(UsageRecord(org_id, request.purpose, subject_id, model, 0, 0, 0, 0, "refused"))
+                metrics.LLM_REQUESTS.labels(request.purpose, "refused").inc()
                 raise
             budget.charge(response.total_tokens)
+            metrics.LLM_REQUESTS.labels(request.purpose, "ok").inc()
+            metrics.LLM_TOKENS.labels(request.purpose, "input").inc(response.input_tokens)
+            metrics.LLM_TOKENS.labels(request.purpose, "output").inc(response.output_tokens)
+            metrics.LLM_TOKENS.labels(request.purpose, "cached").inc(response.cached_tokens)
             await sink.record(
                 UsageRecord(
                     org_id,
@@ -228,6 +236,7 @@ class Gateway:
                 },
             ]
         await sink.record(UsageRecord(org_id, request.purpose, subject_id, "-", 0, 0, 0, 0, "schema_invalid"))
+        metrics.LLM_REQUESTS.labels(request.purpose, "schema_invalid").inc()
         raise SchemaInvalid(errors)
 
 

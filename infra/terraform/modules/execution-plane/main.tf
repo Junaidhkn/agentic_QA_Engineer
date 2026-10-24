@@ -41,6 +41,7 @@ variable "tags" {
 }
 
 data "aws_region" "current" {}
+data "aws_caller_identity" "current" {}
 
 resource "aws_security_group" "runner" {
   name        = "${var.name}-runner"
@@ -96,6 +97,17 @@ resource "aws_iam_role_policy" "runner" {
       { Effect = "Allow", Action = ["ecr:GetAuthorizationToken", "ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer"], Resource = "*" },
       { Effect = "Allow", Action = ["logs:CreateLogStream", "logs:PutLogEvents"], Resource = "*" },
       { Effect = "Allow", Action = ["secretsmanager:GetSecretValue"], Resource = var.runner_token_secret_arn },
+      {
+        Effect    = "Allow"
+        Action    = ["cloudwatch:PutMetricData"]
+        Resource  = "*"
+        Condition = { StringEquals = { "cloudwatch:namespace" = "ReliabilityEngineer/Execution" } }
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["autoscaling:CompleteLifecycleAction"]
+        Resource = "arn:aws:autoscaling:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:autoScalingGroup:*:autoScalingGroupName/${local.asg_name}"
+      },
     ]
   })
 }
@@ -128,6 +140,8 @@ resource "aws_launch_template" "runner" {
     api_url                 = "https://${aws_vpc_endpoint.control_plane.dns_entry[0].dns_name}"
     runner_token_secret_arn = var.runner_token_secret_arn
     region                  = data.aws_region.current.name
+    asg_name                = local.asg_name
+    lifecycle_hook          = local.drain_hook
   }))
   tag_specifications {
     resource_type = "instance"
@@ -135,8 +149,13 @@ resource "aws_launch_template" "runner" {
   }
 }
 
+locals {
+  asg_name   = "${var.name}-runner"
+  drain_hook = "drain"
+}
+
 resource "aws_autoscaling_group" "runner" {
-  name                  = "${var.name}-runner"
+  name                  = local.asg_name
   vpc_zone_identifier   = var.private_subnet_ids
   min_size              = var.min_size
   max_size              = var.max_size
@@ -161,7 +180,19 @@ resource "aws_autoscaling_group" "runner" {
   }
 }
 
-# Scale on the control plane's queue-depth metric (queued runs + jobs per free slot).
+# Terminating hosts drain first: the host agent sees the lifecycle state, stops the runner
+# (no new leases, active jobs finish) and completes the action. The timeout covers the
+# longest job (1 h load run + slack); after it the instance terminates anyway.
+resource "aws_autoscaling_lifecycle_hook" "drain" {
+  name                   = local.drain_hook
+  autoscaling_group_name = aws_autoscaling_group.runner.name
+  lifecycle_transition   = "autoscaling:EC2_INSTANCE_TERMINATING"
+  heartbeat_timeout      = 4200
+  default_result         = "CONTINUE"
+}
+
+# Scale on slot utilization (busy ÷ slots per host, published by the host agent every 30 s);
+# a saturated fleet reads 1.0 and scales out toward the 0.8 target.
 resource "aws_autoscaling_policy" "queue_depth" {
   name                   = "${var.name}-queue-depth"
   autoscaling_group_name = aws_autoscaling_group.runner.name
@@ -172,6 +203,10 @@ resource "aws_autoscaling_policy" "queue_depth" {
       metric_name = "SlotUtilization"
       namespace   = "ReliabilityEngineer/Execution"
       statistic   = "Average"
+      metric_dimension {
+        name  = "AutoScalingGroupName"
+        value = local.asg_name
+      }
     }
   }
 }

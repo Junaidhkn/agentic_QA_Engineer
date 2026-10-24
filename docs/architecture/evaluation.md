@@ -109,6 +109,21 @@ patches without seeing the agent's explanation, rating correct / acceptable / wr
 | Zero unauthorized production load tests / auto-deploys | admission audit; egress proxy logs vs verified hosts; absence of merge/deploy code paths (test asserts App has no merge calls) | 0 violations; any egress to non-allowlisted host pages | continuous |
 | Kill ≤ 10 s | chaos test: stop during 1,000-VU run, measure last request timestamp at target | 100% ≤ 10 s | nightly |
 
+### As built (Phase 10): how each row is checked today
+
+| Criterion | Automated check | Status |
+|---|---|---|
+| 1,000 VUs for 10 min; p95 < 500 ms, < 1 % failures | NFR-1 reference workload on a 4 vCPU generator | **Not yet run** — needs the staging execution plane (gVisor hosts); the k6 path is exercised end to end at small scale in CI |
+| Approved critical workflows executed; discovered vs tested | coverage report (`/projects/{id}/summary`, report `coverage` section) | In CI on the corpus apps (Phase 5, 9 tests) |
+| Evidence on every root cause | invariant `hypothesis_without_verified_support` (hourly `ops.integrity`, pages on > 0) + save/read filters | Continuous |
+| Diagnosis precision | `tests/benchmark` (diagnosis) | 6/6 top-1 on the seeded corpus (Phase 7); online feedback tracked |
+| Repairs verified only after all gates | invariant `verified_repair_without_passed_gates` (hourly) + pipeline tests | Continuous |
+| 99.9 % availability | `re_http_requests_total` burn-rate alerts + canary every 15 min + ALB 5xx alarm | Instrumented; the monthly number needs production traffic |
+| 95 % jobs start < 30 s | `re_job_start_seconds` SLI + burn-rate alerts; `benchmarks/harness/platform_load.py` | Scaled run in CI (3 lanes, 4 runners: p95 ≈ 4 s); the 25-concurrent replay needs staging |
+| Zero unauthorized production load tests / auto-deploys | admission tests; invariant `pull_request_without_approval`; architecture test (no merge/deploy code paths) | Continuous |
+| Kill ≤ 10 s | `re_kill_latency_seconds` (runner-measured) + `KillLatencyBreach` page; chaos/e2e tests stop a running load run | In CI at 3 VUs; the 1,000-VU nightly chaos run needs staging |
+| Backups restorable | weekly `restore-drill` (RDS) recording `restore_drill`; dump-mode drill in CI | Dump drill in CI; RDS drill runs once staging exists |
+
 ## 6. Performance comparison statistics
 
 Used for regression findings and the `load_comparison` gate ([ADR-0016](decisions/0016-gate-verified-status-on-independent-checks-and-statistical-load-comparison.md)).

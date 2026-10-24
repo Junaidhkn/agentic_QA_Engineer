@@ -25,6 +25,7 @@ dependencies = [
   "anthropic>=0.40",
   "pyyaml>=6.0",
   "email-validator>=2.2",
+  "prometheus-client>=0.21",
 ]
 
 [project.optional-dependencies]

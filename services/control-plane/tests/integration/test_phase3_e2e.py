@@ -309,6 +309,15 @@ async def test_load_run_end_to_end_with_approval_probe_and_cancel(live_api: str,
         assert time.monotonic() - stop_at <= 10, "traffic must stop within 10 seconds"
         stopped = await _wait_status(client, long_run["id"], h, {"cancelled"}, timeout=20)
         assert stopped["status_reason"] == "test stop"
+        (health,) = sql("SELECT generator_health FROM runs WHERE id = %s", uuid.UUID(long_run["id"]))[0]
+        assert 0 <= health["kill_latency_s"] <= 10, health
+
+        # Platform metrics saw the job starts and the kill (operations §6).
+        scraped = (await client.get("/metrics")).text
+        assert 're_kill_latency_seconds_count{job_type="load"} 1.0' in scraped
+        assert 're_job_start_seconds_count{job_type="load"}' in scraped
+        assert 're_job_start_seconds_count{job_type="probe"}' in scraped
+        assert str(org.project_id) not in scraped and long_run["id"] not in scraped
 
 
 async def test_unverified_or_production_targets_are_refused(live_api: str) -> None:

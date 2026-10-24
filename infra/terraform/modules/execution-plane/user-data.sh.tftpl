@@ -17,4 +17,10 @@ RA_SLOTS=4
 RA_WORKDIR=/var/lib/runner
 ENV
 chmod 600 /etc/runner-agent.env
-systemctl enable --now runner-agent
+cat > /etc/runner-host.env <<ENV
+REGION=${region}
+ASG_NAME=${asg_name}
+LIFECYCLE_HOOK=${lifecycle_hook}
+STATUS_FILE=/var/lib/runner/status.json
+ENV
+systemctl enable --now runner-agent runner-host-agent

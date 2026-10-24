@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import signal
+import time
+from pathlib import Path
 
 from runner_agent.client import LeaseClient
 from runner_agent.config import Config, get_config
@@ -30,6 +33,8 @@ async def serve(
     slots = asyncio.Semaphore(config.slots)
     tasks: set[asyncio.Task[None]] = set()
     started = 0
+    status = Path(config.workdir) / "status.json"
+    write_status(status, config.slots, 0, draining=False)
     try:
         while not stop.is_set() and (max_jobs is None or started < max_jobs):
             await slots.acquire()
@@ -51,12 +56,35 @@ async def serve(
             started += 1
             task = asyncio.create_task(runner.run(lease))
             tasks.add(task)
-            task.add_done_callback(lambda t: (tasks.discard(t), slots.release()))
+            write_status(status, config.slots, len(tasks), draining=False)
+
+            def done(t: asyncio.Task[None]) -> None:
+                tasks.discard(t)
+                slots.release()
+                write_status(status, config.slots, len(tasks), draining=stop.is_set())
+
+            task.add_done_callback(done)
         if tasks:
+            # Draining (SIGTERM): no new leases, let active jobs finish (host agent waits for this).
+            write_status(status, config.slots, len(tasks), draining=True)
             await asyncio.gather(*tasks, return_exceptions=True)
     finally:
+        write_status(status, config.slots, 0, draining=True)
         await client.close()
     return started
+
+
+def write_status(path: Path, slots: int, busy: int, draining: bool) -> None:
+    """Local status for the host agent (infra/packer/files/runner-host-agent.sh): it publishes
+    ``SlotUtilization`` for the execution-plane autoscaling group and waits for busy == 0 when
+    the host is being terminated."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"slots": slots, "busy": busy, "draining": draining, "at": time.time()}))
+        tmp.replace(path)
+    except OSError:
+        log.warning("could not write runner status", exc_info=True)
 
 
 def main() -> None:

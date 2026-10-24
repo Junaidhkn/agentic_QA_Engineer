@@ -40,3 +40,23 @@ runner (`services/control-plane/tests/benchmark`, opt-in with `RE_RUN_BENCHMARK=
 
 Gates: top-3 ≥ 60% (diagnosis); oracle pass ≥ 90%, false-verified < 5%, agent verified ≥ 40%
 with a real model (repair).
+
+## Platform load test (NFR-4)
+
+`harness/platform_load.py` replays the reference platform load against a deployed API:
+`--load-concurrency` load runs kept active (one *lane* per verified target, default 25) plus
+Poisson functional arrivals (`--functional-per-hour`, default 100) for `--minutes`, then
+reports job start (`started_at − queued_at`, queued → first container running) by kind.
+Pass: p95 < 30 s, no run errored for platform reasons, no submission refused.
+
+```bash
+uv run python benchmarks/harness/platform_load.py --api-url https://api.staging.example \
+  --lanes lanes.json --minutes 60 --functional-per-hour 100
+```
+
+`lanes.json` lists `{api_key, project_id, target_id, load_profile_id}` per lane; give each
+lane its own API key (run creation is rate-limited per key) and make sure every target had
+its first, approved load run. Reports go to `benchmarks/out/platform-load.{json,md}`.
+
+CI runs a scaled version on every change (`tests/integration/test_phase10_platform_load.py`:
+3 lanes, 4 runners, real k6, one minute).

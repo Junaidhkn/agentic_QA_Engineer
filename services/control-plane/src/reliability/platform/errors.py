@@ -60,6 +60,12 @@ class AppError(Exception):
         return ERROR_STATUS[self.code]
 
 
+def is_rls_denial(exc: BaseException) -> bool:
+    """A query refused by a row-level-security policy: a tenancy bug, alerted on at any rate."""
+    text = str(exc).lower()
+    return "row-level security" in text or "row level security" in text
+
+
 def not_found(kind: str = "resource") -> AppError:
     return AppError("NOT_FOUND", f"{kind} not found")
 
@@ -102,5 +108,9 @@ def install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
+        if is_rls_denial(exc):
+            from reliability.platform.metrics import RLS_DENIALS
+
+            RLS_DENIALS.inc()
         log.exception("unhandled error", extra={"request_id": getattr(request.state, "request_id", None)})
         return JSONResponse(_envelope(request, "UNAVAILABLE", "internal error", {}), status_code=500)

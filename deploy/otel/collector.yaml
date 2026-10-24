@@ -2,8 +2,14 @@
 # The gateway authenticates every request and sets X-Scope-OrgID; the collector keeps that
 # header as client metadata, batches per tenant and forwards it to Mimir / Tempo / Loki.
 # Head sampling (10%) happens at the source via W3C traceparent flags.
+# When Mimir/Tempo/Loki are down, exporters queue to disk (file_storage on a mounted volume)
+# and retry for up to 1 hour (operations §3 "LGTM down"); beyond that the oldest data is
+# dropped — run summaries and findings live in Postgres and are unaffected.
 extensions:
   health_check: {}
+  file_storage/queue:
+    directory: ${env:OTEL_QUEUE_DIR}
+    create_directory: true
   headers_setter:
     headers:
       - action: upsert
@@ -41,15 +47,24 @@ exporters:
     endpoint: ${env:MIMIR_URL}/api/v1/push
     auth: { authenticator: headers_setter }
     resource_to_telemetry_conversion: { enabled: true }
+    # This exporter has no persistent queue; its WAL buffers to disk instead.
+    wal:
+      directory: ${env:OTEL_QUEUE_DIR}/mimir-wal
+      buffer_size: 1000
+    retry_on_failure: { enabled: true, max_elapsed_time: 1h }
   otlphttp/tempo:
     endpoint: ${env:TEMPO_OTLP_URL}
     auth: { authenticator: headers_setter }
+    sending_queue: { enabled: true, storage: file_storage/queue, queue_size: 5000 }
+    retry_on_failure: { enabled: true, max_elapsed_time: 1h }
   otlphttp/loki:
     endpoint: ${env:LOKI_URL}/otlp
     auth: { authenticator: headers_setter }
+    sending_queue: { enabled: true, storage: file_storage/queue, queue_size: 5000 }
+    retry_on_failure: { enabled: true, max_elapsed_time: 1h }
 
 service:
-  extensions: [health_check, headers_setter]
+  extensions: [health_check, headers_setter, file_storage/queue]
   pipelines:
     traces:
       receivers: [otlp]

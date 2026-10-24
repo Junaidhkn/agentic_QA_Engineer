@@ -105,3 +105,14 @@ jobs:
           for d in infra/terraform/envs/*/; do
             terraform -chdir="$d" init -backend=false -input=false && terraform -chdir="$d" validate
           done
+
+  observability:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install promtool
+        run: |
+          curl -sSL https://github.com/prometheus/prometheus/releases/download/v2.54.1/prometheus-2.54.1.linux-amd64.tar.gz \
+            | tar xz --strip-components=1 prometheus-2.54.1.linux-amd64/promtool
+      - run: ./promtool check rules deploy/observability/rules/platform-slo.rules.yml
+      - run: ./promtool test rules deploy/observability/rules/tests/*.test.yml

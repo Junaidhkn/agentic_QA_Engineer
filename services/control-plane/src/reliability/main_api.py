@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import hmac
+import re
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, MutableMapping
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from reliability.platform import db, redis_client
+from reliability.platform import db, metrics, redis_client
 from reliability.platform.errors import install_error_handlers
 from reliability.platform.ids import uuid7
 from reliability.platform.logging import configure_logging, request_id_var
@@ -44,6 +47,9 @@ def create_app() -> FastAPI:
         redoc_url=None,
     )
     install_error_handlers(app)
+    from reliability.modules.ops.metrics import DatabaseCollector
+
+    metrics.set_db_collector(DatabaseCollector())
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -59,15 +65,31 @@ def create_app() -> FastAPI:
         request.state.request_id = rid
         token = request_id_var.set(rid)
         started = time.perf_counter()
+        status = 500
         try:
             response = await call_next(request)
+            status = response.status_code
         finally:
             request_id_var.reset(token)
+            _observe(request, status, time.perf_counter() - started)
         response.headers["X-Request-Id"] = rid
         response.headers["Server-Timing"] = f"app;dur={(time.perf_counter() - started) * 1000:.1f}"
         for key, value in SECURITY_HEADERS.items():
             response.headers.setdefault(key, value)
         return response
+
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics_endpoint(request: Request) -> Response:
+        # Internal only: the ALB never routes /metrics; the token is the second lock.
+        expected = settings.metrics_token
+        if expected is None and settings.env not in ("local", "test"):
+            return Response(status_code=404)
+        if expected is not None:
+            given = request.headers.get("Authorization", "").removeprefix("Bearer ")
+            if not hmac.compare_digest(given.encode(), expected.get_secret_value().encode()):
+                return Response(status_code=404)
+        body, content_type = await metrics.render()
+        return Response(body, media_type=content_type, headers={"Cache-Control": "no-store"})
 
     @app.get("/healthz", include_in_schema=False)
     async def healthz() -> dict[str, str]:
@@ -81,6 +103,28 @@ def create_app() -> FastAPI:
 
     include_routers(app)
     return app
+
+
+UNOBSERVED = {"/metrics", "/healthz", "/readyz"}
+
+
+def route_template(scope: MutableMapping[str, Any]) -> str:
+    """``/v1/projects/0192…`` → ``/v1/projects/{project_id}``. Included routers keep only their own
+    path on the matched route, so the template is rebuilt from the request path and its params."""
+    if scope.get("route") is None:
+        return "unmatched"
+    path: str = scope.get("path", "")
+    for name, value in (scope.get("path_params") or {}).items():
+        path = re.sub(rf"(?<=[/:]){re.escape(str(value))}(?=$|[/:])", "{" + name + "}", path)
+    return path
+
+
+def _observe(request: Request, status: int, seconds: float) -> None:
+    template = route_template(request.scope)
+    if template in UNOBSERVED:
+        return
+    metrics.HTTP_REQUESTS.labels(request.method, template, metrics.status_class(status)).inc()
+    metrics.HTTP_DURATION.labels(request.method, template).observe(seconds)
 
 
 app = create_app()
