@@ -113,7 +113,7 @@ async def test_sandbox_build_and_load_run_from_source(live_api: str, tmp_path: P
         report = done["report"]
         assert report["healthy"] and report["migrations"] == "applied" and report["seed"] == "applied"
         tables = {t["relname"]: t for t in report["db"]["tables"]}
-        assert tables["tasks"]["n_live_tup"] == 3000
+        assert tables["tasks"]["n_live_tup"] == 1_000_000
         log = await client.get(f"/v1/sandbox-builds/{build.json()['id']}/log", headers=h)
         assert log.status_code == 200 and "alembic" in (await client.get(log.json()["url"])).text
 
@@ -165,7 +165,7 @@ async def test_sandbox_build_and_load_run_from_source(live_api: str, tmp_path: P
         sandbox = ref["report"]
         assert sandbox["healthy"] and sandbox["driver"] == "process"
         tasks = next(t for t in sandbox["db"]["tables"] if t["relname"] == "tasks")
-        assert tasks["n_tup_ins"] > 3000  # seed + tasks created by the load test
+        assert tasks["n_tup_ins"] > 1_000_000  # seed + tasks created by the load test
         assert sandbox["db_samples"], "connection samples are collected during the run"
         used = sql(
             "SELECT coalesce(sum(quantity), 0) FROM usage_ledger WHERE org_id = %s AND kind = 'sandbox_minutes'",

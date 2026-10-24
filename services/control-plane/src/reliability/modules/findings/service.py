@@ -94,6 +94,8 @@ def _load_artifact_json(arts: list[artifacts.Artifact], kind: str, name: str) ->
 async def evaluate_run(session: AsyncSession, run: Run) -> list[Finding]:
     if run.status not in ("passed", "failed"):
         return []  # invalid / errored / cancelled runs do not produce findings
+    if (run.config_snapshot or {}).get("experiment"):
+        return []  # diagnosis experiments measure a hypothesis; they are not new findings
     arts = await artifacts.for_run(session, run.id)
     summary = run.summary or {}
     wfs = {

@@ -10,6 +10,9 @@ on:
       - "services/control-plane/src/reliability/llm/**"
       - "services/control-plane/src/reliability/modules/testsuites/**"
       - "services/control-plane/src/reliability/modules/workflows/**"
+      - "services/control-plane/src/reliability/modules/diagnosis/**"
+      - "services/control-plane/tests/benchmark/**"
+      - "services/control-plane/tests/support/defects.py"
       - "benchmarks/**"
       - ".github/workflows/evals.yml"
   push:
@@ -68,3 +71,48 @@ jobs:
       - name: Summary
         if: always()
         run: cat ../../benchmarks/out/*/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+
+  # Diagnosis benchmark (Phase 7 gate): every labelled corpus defect runs in a real sandbox,
+  # gets a finding and a diagnosis; gates top-3/top-1 precision, citation validity, calibration.
+  diagnosis:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:16.6
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-retries 20
+      redis:
+        image: redis:7.4.1
+        ports: ["6379:6379"]
+    defaults:
+      run:
+        working-directory: services/control-plane
+    env:
+      RE_ENV: test
+      PGPASSWORD: postgres
+      RE_TEST_PG_SUPERUSER_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      RE_RUN_BENCHMARK: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with: { version: "0.5.11" }
+      - uses: grafana/setup-k6-action@v1
+        with: { k6-version: "0.54.0" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: uv sync --frozen --extra dev
+      - name: Bootstrap database roles
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ../../scripts/db-bootstrap.sql
+      - name: Diagnosis benchmark
+        run: uv run pytest -s -q tests/benchmark/test_diagnosis_benchmark.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: diagnosis-benchmark
+          path: benchmarks/out/diagnosis.*
+      - name: Summary
+        if: always()
+        run: cat ../../benchmarks/out/diagnosis.md >> "$GITHUB_STEP_SUMMARY" || true

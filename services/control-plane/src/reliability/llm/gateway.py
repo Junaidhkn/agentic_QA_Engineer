@@ -64,6 +64,8 @@ class NullSink:
 
 def _redact_messages(messages: list[dict[str, Any]], values: Iterable[str]) -> list[dict[str, Any]]:
     def scrub(value: Any) -> Any:
+        if isinstance(value, dict) and value.get("type") in ("thinking", "redacted_thinking"):
+            return value  # model output replayed verbatim (signed); never contains customer input
         if isinstance(value, str):
             return redact(value, values)
         if isinstance(value, list):

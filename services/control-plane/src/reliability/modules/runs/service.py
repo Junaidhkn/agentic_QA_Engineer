@@ -181,12 +181,18 @@ async def create_run(
     idempotency_key: str | None = None,
     system: bool = False,
     requested_via: str = "ui",
+    profile_override: LoadProfile | None = None,
+    config_extra: dict[str, Any] | None = None,
 ) -> Run:
+    """Create a run through admission control. ``profile_override`` is a transient (unsaved) load
+    profile used by system runs such as diagnosis experiments."""
     suite = await suites.get(session, suite_id) if suite_id else await suites.latest_ready(session, project.id)
     if suite is None or suite.project_id != project.id:
         raise AppError("CONFLICT", "no ready test suite; generate one first")
     profile: LoadProfile | None = None
-    if kind == "load":
+    if kind == "load" and profile_override is not None:
+        profile = profile_override
+    elif kind == "load":
         if load_profile_id is None:
             raise AppError("VALIDATION_FAILED", "load runs need a load_profile_id")
         profile = await profiles.get(session, load_profile_id)
@@ -230,6 +236,7 @@ async def create_run(
     if environment_kind == "sandbox_build":
         config["max_wall_s"] = int(config.get("max_wall_s", 1800)) + SANDBOX_SETUP_S
         config["sandbox"] = True
+    config.update(config_extra or {})
     if target is not None:
         config["target"] = {"base_url": target.base_url, "host": target.host, "environment": target.environment}
     run = Run(
@@ -238,7 +245,7 @@ async def create_run(
         project_id=project.id,
         target_id=target.id if target else None,
         suite_id=suite.id,
-        load_profile_id=profile.id if profile else None,
+        load_profile_id=profile.id if profile and profile_override is None else None,
         kind=kind,
         environment_kind=environment_kind,
         build_ref=build_ref,

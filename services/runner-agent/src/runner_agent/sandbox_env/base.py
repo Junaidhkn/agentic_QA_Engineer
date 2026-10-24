@@ -18,7 +18,8 @@ SELECT json_build_object(
       SELECT relname, seq_scan, seq_tup_read, idx_scan, n_live_tup, n_tup_ins, n_tup_upd, n_tup_del
       FROM pg_stat_user_tables) t),
   'indexes', (SELECT coalesce(json_agg(i ORDER BY i.idx_scan), '[]'::json) FROM (
-      SELECT relname, indexrelname, idx_scan FROM pg_stat_user_indexes) i),
+      SELECT s.relname, s.indexrelname, s.idx_scan, x.indexdef FROM pg_stat_user_indexes s
+      JOIN pg_indexes x ON x.indexname = s.indexrelname AND x.schemaname = s.schemaname) i),
   'connections', (SELECT json_build_object(
       'total', count(*), 'active', count(*) FILTER (WHERE state = 'active'),
       'idle_in_transaction', count(*) FILTER (WHERE state LIKE 'idle in transaction%'),
@@ -37,7 +38,7 @@ SELECT coalesce(json_agg(s), '[]'::json) FROM (
 CONNECTIONS_SQL = """
 SELECT json_build_object('active', count(*) FILTER (WHERE state = 'active'),
   'idle_in_transaction', count(*) FILTER (WHERE state LIKE 'idle in transaction%'), 'total', count(*))
-FROM pg_stat_activity WHERE datname = current_database()
+FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()
 """
 
 

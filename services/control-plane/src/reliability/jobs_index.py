@@ -1,6 +1,7 @@
 """Imports every module that registers background jobs. Extended as modules are added."""
 
 from reliability.modules.audit import jobs as _audit_jobs  # noqa: F401
+from reliability.modules.diagnosis import jobs as _diagnosis_jobs  # noqa: F401
 from reliability.modules.discovery import jobs as _discovery_jobs  # noqa: F401
 from reliability.modules.environments import jobs as _environments_jobs  # noqa: F401
 from reliability.modules.findings import jobs as _findings_jobs  # noqa: F401

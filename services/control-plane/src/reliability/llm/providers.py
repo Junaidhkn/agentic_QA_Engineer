@@ -79,6 +79,9 @@ class AnthropicClient:
                 blocks.append({"type": "text", "text": block.text})
             elif block.type == "tool_use":
                 blocks.append({"type": "tool_use", "id": block.id, "name": block.name, "input": dict(block.input)})
+            elif block.type in ("thinking", "redacted_thinking"):
+                # Kept verbatim: tool-use continuations must send thinking blocks back unchanged.
+                blocks.append(block.model_dump(exclude_none=True))
         usage = message.usage
         iterations = getattr(usage, "iterations", None) or []
         return LLMResponse(

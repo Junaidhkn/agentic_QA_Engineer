@@ -58,6 +58,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/diagnoses/{diagnosis_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Diagnosis */
+        get: operations["get_diagnosis_v1_diagnoses__diagnosis_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/discoveries/{discovery_id}": {
         parameters: {
             query?: never;
@@ -108,6 +125,41 @@ export interface paths {
         head?: never;
         /** Triage */
         patch: operations["triage_v1_findings__finding_id__patch"];
+        trace?: never;
+    };
+    "/v1/findings/{finding_id}/diagnoses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Diagnoses */
+        get: operations["list_diagnoses_v1_findings__finding_id__diagnoses_get"];
+        put?: never;
+        /** Start Diagnosis */
+        post: operations["start_diagnosis_v1_findings__finding_id__diagnoses_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/hypotheses/{hypothesis_id}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Hypothesis Feedback */
+        post: operations["hypothesis_feedback_v1_hypotheses__hypothesis_id__feedback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/integrations/github/install-url": {
@@ -294,6 +346,26 @@ export interface paths {
         };
         /** Audit Events */
         get: operations["audit_events_v1_orgs__org_id__audit_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/orgs/{org_id}/diagnosis-quality": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Diagnosis Quality
+         * @description Online precision from user feedback (evaluation §5).
+         */
+        get: operations["diagnosis_quality_v1_orgs__org_id__diagnosis_quality_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1300,6 +1372,28 @@ export interface components {
             /** Workflow Key */
             workflow_key: string;
         };
+        /** CitationOut */
+        CitationOut: {
+            /** Check */
+            check: string;
+            /** Claim */
+            claim: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Locator */
+            locator: {
+                [key: string]: unknown;
+            };
+            /** Relation */
+            relation: string;
+            /** Summary */
+            summary: string;
+        };
         /** DecisionIn */
         DecisionIn: {
             /**
@@ -1309,6 +1403,45 @@ export interface components {
             decision: "approved" | "rejected";
             /** Reason */
             reason?: string | null;
+        };
+        /** DiagnosisOut */
+        DiagnosisOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Disclaimer
+             * @default Hypotheses are ranked explanations backed by the evidence shown; they are not guaranteed root causes. Confidence is computed from the evidence, not from the model.
+             */
+            disclaimer: string;
+            /**
+             * Finding Id
+             * Format: uuid
+             */
+            finding_id: string;
+            /** Finished At */
+            finished_at: string | null;
+            /** Hypotheses */
+            hypotheses?: components["schemas"]["HypothesisOut"][] | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Model Info */
+            model_info: {
+                [key: string]: unknown;
+            } | null;
+            /** Next Steps */
+            next_steps: string[];
+            /** Status */
+            status: string;
+            /** Token Usage */
+            token_usage: {
+                [key: string]: unknown;
+            } | null;
         };
         /** DiscoveryCreate */
         DiscoveryCreate: {
@@ -1412,6 +1545,16 @@ export interface components {
             /** Summary */
             summary: string;
         };
+        /** FeedbackIn */
+        FeedbackIn: {
+            /** Note */
+            note?: string | null;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "confirmed" | "refuted" | "unsure";
+        };
         /** FindingOut */
         FindingOut: {
             /**
@@ -1479,6 +1622,45 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HypothesisOut */
+        HypothesisOut: {
+            /** Category */
+            category: string;
+            /** Code Locations */
+            code_locations: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "high" | "medium" | "low";
+            /** Confidence Factors */
+            confidence_factors: {
+                [key: string]: unknown;
+            };
+            /** Evidence */
+            evidence: components["schemas"]["CitationOut"][];
+            /** Fix Direction */
+            fix_direction: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Mechanism */
+            mechanism: string;
+            /** Rank */
+            rank: number;
+            /** Statement */
+            statement: string;
+            /** Status */
+            status: string;
+            /** User Verdict */
+            user_verdict: string | null;
+            /** User Verdict Note */
+            user_verdict_note: string | null;
         };
         /** IngestTokenCreated */
         IngestTokenCreated: {
@@ -2324,6 +2506,39 @@ export interface operations {
             };
         };
     };
+    get_diagnosis_v1_diagnoses__diagnosis_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                diagnosis_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagnosisOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_discovery_v1_discoveries__discovery_id__get: {
         parameters: {
             query?: never;
@@ -2447,6 +2662,112 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FindingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_diagnoses_v1_findings__finding_id__diagnoses_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                finding_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagnosisOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_diagnosis_v1_findings__finding_id__diagnoses_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "idempotency-key"?: string | null;
+                authorization?: string | null;
+            };
+            path: {
+                finding_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagnosisOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    hypothesis_feedback_v1_hypotheses__hypothesis_id__feedback_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                hypothesis_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeedbackIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -2986,6 +3307,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    diagnosis_quality_v1_orgs__org_id__diagnosis_quality_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */

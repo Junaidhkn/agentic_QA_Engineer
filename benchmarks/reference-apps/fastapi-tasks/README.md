@@ -7,6 +7,10 @@ Needs `DATABASE_URL` (e.g. `postgresql+psycopg://user:pw@localhost/tasks`).
 alembic upgrade head && python -m app.seed && uvicorn app.main:app --port 8000
 ```
 
+The seed loads 1,000,000 tasks (200,000 distinct assignees) and 200,000 comments server-side
+with `generate_series` (~10 s), large enough that a missing index on a selective filter shows
+up as tens of milliseconds per request.
+
 ## Defect toggles (`DEFECTS=…`)
 
 | Defect | Symptom | Mechanism | Fix touches |

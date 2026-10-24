@@ -215,6 +215,20 @@ weight), contradicting evidence (penalty), code location verified on hot path. B
 `high ≥ 0.75`, `medium ≥ 0.45`, else `low`. The LLM's own stated confidence is **not** an
 input. Weights are tuned on the benchmark (evaluation.md) and versioned.
 
+> **As built (Phase 7, see plan.md deviations):** `collect_context` also runs deterministic
+> rules (`agents/diagnosis/rules.py`) that turn the evidence pack (sandbox DB snapshots,
+> per-endpoint metric windows, error samples, static checks on the hot-path handler: DB calls
+> in loops, blocking calls, unindexed filters, unlocked read-modify-write, tiny pool sizes)
+> into baseline hypotheses; model hypotheses are merged with them and pass the same citation
+> checks, so diagnosis still works with the LLM disabled. The experiment is one template for
+> every load-shaped category — a **concurrency contrast** (two system load runs in the same
+> sandbox: 1 VU and the observed VUs, limited to workflows touching the endpoint), run through
+> a LangGraph `interrupt` resumed by `diagnosis.experiment_run_done`; cost categories are
+> supported when latency is already high at 1 VU, contention categories when it appears only
+> under load. Races are confirmed by the concurrency probe that found them. Findings on customer
+> targets never get experiments. `explain_plan`, `query_metrics` and `symbol_refs` are not
+> built yet; `find_traces`/`search_logs` are offered only when a telemetry backend is configured.
+
 ---
 
 ## 6. Repair graph

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
+import { DiagnosisPanel } from "@/components/findings/DiagnosisPanel";
 import { EvidenceCard } from "@/components/findings/EvidenceCard";
 import { Badge, Button, Card, ErrorNote, fmtDate, StateView } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
@@ -37,7 +38,7 @@ export default function FindingDetail() {
           <Card title={`Evidence (${f.evidence?.length ?? 0})`}>
             <div className="space-y-3">{(f.evidence ?? []).map((e, i) => <EvidenceCard key={e.id} e={e} index={i} />)}</div>
           </Card>
-          <div id="diagnosis-slot" />
+          <DiagnosisPanel findingId={findingId} canRun={hasRole(role, "engineer")} />
           {hasRole(role, "engineer") && (
             <Card title="Triage">
               <ErrorNote error={triage.error} />

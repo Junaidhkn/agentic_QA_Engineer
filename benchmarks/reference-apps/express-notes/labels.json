@@ -22,7 +22,8 @@
       "files": [
         "routes/notes.js"
       ],
-      "mechanism": "per-note artificial delay"
+      "mechanism": "per-note artificial delay",
+      "category": "blocking_io"
     }
   },
   "run": {
