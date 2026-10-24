@@ -61,3 +61,4 @@ def include_routers(app: FastAPI) -> None:
     app.include_router(v1)
     app.include_router(github_api.webhook_router)
     app.include_router(runners_api.router)
+    app.include_router(reports_api.public_router)

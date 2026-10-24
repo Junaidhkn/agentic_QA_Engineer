@@ -4,11 +4,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 
-import { Badge, Button, Card, ErrorNote, Field, fmtDate, Input, StateView, Table } from "@/components/ui";
+import { Badge, Button, Card, ErrorNote, Field, fmtDate, Input, Select, StateView, Table } from "@/components/ui";
 import { apiFetch, newIdempotencyKey } from "@/lib/api";
 import { hasRole } from "@/lib/org";
 import { useProject } from "@/lib/project";
-import type { Discovery, LinkedRepo, OpenApiSpec, SourceArchive } from "@/lib/types";
+import type { Discovery, LinkedRepo, OpenApiSpec, SecretMeta, SourceArchive, Target } from "@/lib/types";
 
 const ACTIVE = new Set(["queued", "running"]);
 
@@ -69,6 +69,10 @@ export default function DiscoveryPage() {
   const [archive, setArchive] = useState<File | null>(null);
   const [chosenSpecs, setChosenSpecs] = useState<Set<string>>(new Set());
   const [specText, setSpecText] = useState("");
+  const targets = useQuery({ queryKey: ["targets", id], queryFn: () => apiFetch<Target[]>(`/v1/projects/${id}/targets`), enabled: engineer });
+  const secrets = useQuery({ queryKey: ["secrets", id], queryFn: () => apiFetch<SecretMeta[]>(`/v1/projects/${id}/secrets`), enabled: engineer });
+  const verified = (targets.data ?? []).filter((t) => t.status === "verified");
+  const [explore, setExplore] = useState({ target: "", budget: "150", minutes: "15", user: "", password: "" });
 
   const start = useMutation({
     mutationFn: async () => {
@@ -81,7 +85,20 @@ export default function DiscoveryPage() {
       }
       return apiFetch<Discovery>(`/v1/projects/${id}/discoveries`, {
         method: "POST", idempotencyKey: newIdempotencyKey(),
-        body: JSON.stringify({ commit_ref: ref || null, archive_artifact_id: archiveId ?? null, openapi_spec_ids: [...chosenSpecs] }),
+        body: JSON.stringify({
+          commit_ref: ref || null,
+          archive_artifact_id: archiveId ?? null,
+          openapi_spec_ids: [...chosenSpecs],
+          browser_exploration: explore.target
+            ? {
+                target_id: explore.target,
+                action_budget: Number(explore.budget),
+                time_budget_s: Number(explore.minutes) * 60,
+                username_secret: explore.user || null,
+                password_secret: explore.password || null,
+              }
+            : null,
+        }),
       });
     },
     onSuccess: () => { setArchive(null); qc.invalidateQueries({ queryKey: ["discoveries", id] }); },
@@ -133,6 +150,39 @@ export default function DiscoveryPage() {
                     </ul>
                   )}
                 </StateView>
+              </fieldset>
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium">Browser exploration (optional)</legend>
+                <p className="text-xs text-[var(--muted)]">
+                  A runner crawls a verified target in a real browser, staying on that origin, within the budget below. Deletes, payments,
+                  account changes, email sends and logout are never clicked; they are listed as skipped. Forms it submits become
+                  candidates for you to review.
+                </p>
+                <Select aria-label="Target to explore" value={explore.target} onChange={(e) => setExplore({ ...explore, target: e.target.value })}>
+                  <option value="">Don&apos;t explore</option>
+                  {verified.map((t) => <option key={t.id} value={t.id}>{t.base_url} ({t.environment})</option>)}
+                </Select>
+                {explore.target && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Field label="Action budget"><Input type="number" min={1} max={500} value={explore.budget} onChange={(e) => setExplore({ ...explore, budget: e.target.value })} /></Field>
+                    <Field label="Time budget (minutes)"><Input type="number" min={1} max={30} value={explore.minutes} onChange={(e) => setExplore({ ...explore, minutes: e.target.value })} /></Field>
+                    <Field label="Test user secret">
+                      <Select value={explore.user} onChange={(e) => setExplore({ ...explore, user: e.target.value })}>
+                        <option value="">No login</option>
+                        {(secrets.data ?? []).map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+                      </Select>
+                    </Field>
+                    <Field label="Test password secret">
+                      <Select value={explore.password} onChange={(e) => setExplore({ ...explore, password: e.target.value })}>
+                        <option value="">No login</option>
+                        {(secrets.data ?? []).map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+                      </Select>
+                    </Field>
+                  </div>
+                )}
+                {targets.isSuccess && verified.length === 0 && (
+                  <p className="text-xs text-[var(--muted)]"><Link className="underline" href={`/projects/${id}/targets`}>Verify a target</Link> to enable exploration.</p>
+                )}
               </fieldset>
               <ErrorNote error={start.error} />
               <Button onClick={() => start.mutate()} disabled={start.isPending || (latest !== undefined && ACTIVE.has(latest.status))}>

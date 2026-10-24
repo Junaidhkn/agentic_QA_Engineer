@@ -162,7 +162,7 @@ Role legend: V viewer · E engineer · A admin · O owner (higher roles include 
 | GET | /artifacts/{id}/download | V (E for `may_contain_secrets`) | Presigned GET (5 min) | 302 | |
 | POST | /runs/{id}:cancel | E | Stop traffic (≤ 10 s) | 202 | 409 INVALID_STATE |
 | POST | /comparisons | V | Compare run sets `{baseline_run_ids, candidate_run_ids, scopes?}` | 200 comparison | 422 incompatible runs |
-| GET | /runs/{id}/verdict | key scope `runs:read` | CI-friendly `{status, passed: bool, failed_thresholds:[...]}` | 200 | |
+| GET | /runs/{id}/verdict | key scope `runs:read` | CI-friendly `{run_id, status, finished, passed, reason, failed_thresholds:[...], summary, new_findings:[...], url}` (see `examples/ci/README.md`) | 200 | |
 
 ### Findings, diagnosis, repair, approvals
 
@@ -189,6 +189,10 @@ Role legend: V viewer · E engineer · A admin · O owner (higher roles include 
 | GET | /projects/{id}/trends | V | `?metric=p95_ms&scope=endpoint:…&from&to` per run | 200 |
 | POST | /projects/{id}/reports **I** | V | Generate HTML/JSON report `{from, to, sections}` | 202 |
 | GET | /reports/{id} | V | Status + presigned download + optional share link | 200 |
+| GET | /projects/{id}/reports | V | Reports of the project, newest first | 200 |
+| POST | /reports/{id}/share | E | `{expires_in_days ≤ 30}` → `{url, expires_at}`; the URL is shown once, replaces any earlier link | 200 |
+| DELETE | /reports/{id}/share | E | Revoke the share link | 204 |
+| GET | /shared/reports/{token} (no `/v1`, no auth) | — | Self-contained HTML; strict CSP, `noindex`, `no-store`; 404 when invalid, revoked or expired | 200 |
 
 ## 5. Key request/response schemas
 

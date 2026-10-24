@@ -27,6 +27,7 @@ from reliability.modules.findings.models import Evidence, Finding
 from reliability.modules.identity.service import Principal
 from reliability.modules.integrations.github import pr as github_pr
 from reliability.modules.integrations.github import service as github
+from reliability.modules.quotas import service as quotas
 from reliability.modules.repairs.models import RepairAttempt
 from reliability.modules.runs.models import Run
 from reliability.modules.tenancy.policy import require
@@ -162,6 +163,7 @@ async def start(
         return running
     if principal.user_id is None:
         raise AppError("FORBIDDEN", "repairs are requested by a person (API keys cannot start them)")
+    await quotas.require_feature(session, finding.org_id, "repair", "Repair")
     overrides = {k: v for k, v in (constraints or {}).items() if k in CONSTRAINT_KEYS}
     attempt = await _create(session, finding, h, principal.user_id, {**policy.DEFAULT_CONSTRAINTS, **overrides})
     await audit.record(
@@ -359,6 +361,7 @@ async def on_verification_done(session: AsyncSession, attempt: RepairAttempt) ->
                 "gates": {g["gate"]: g["status"] for g in detail["gates"] if g["applicable"]},
                 "comparison": main,
                 "repository": repo.full_name if repo else None,
+                "project_id": str(attempt.project_id),
             },
         )
         if finding is not None and finding.status in ("open", "diagnosed", "fixing"):

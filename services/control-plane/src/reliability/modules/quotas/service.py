@@ -50,6 +50,13 @@ async def get_plan(session: AsyncSession, org_id: uuid.UUID) -> Plan:
     return plan
 
 
+async def require_feature(session: AsyncSession, org_id: uuid.UUID, feature: str, label: str) -> None:
+    """Plan features (``plans.features``): repair and browser exploration are not on every plan."""
+    plan = await get_plan(session, org_id)
+    if not (plan.features or {}).get(feature):
+        raise AppError("PLAN_LIMIT_EXCEEDED", f"{label} is not included in the {plan.id} plan", {"feature": feature})
+
+
 async def used(session: AsyncSession, org_id: uuid.UUID, kind: UsageKind, period: date | None = None) -> int:
     total = await session.scalar(
         select(func.coalesce(func.sum(UsageEntry.quantity), 0)).where(

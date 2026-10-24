@@ -18,6 +18,7 @@ from reliability.modules.runs import service
 from reliability.modules.runs.models import RunMetricSummary
 from reliability.modules.tenancy.policy import require
 from reliability.platform import idempotency
+from reliability.platform.settings import get_settings
 
 router = APIRouter(tags=["runs"])
 
@@ -92,13 +93,25 @@ class ArtifactOut(BaseModel):
     expires_at: datetime
 
 
+class VerdictFinding(BaseModel):
+    id: uuid.UUID
+    type: str
+    severity: str
+    title: str
+
+
 class VerdictOut(BaseModel):
+    """CI contract (FR-32, additive within /v1): gate on ``passed`` once ``finished``."""
+
     run_id: uuid.UUID
     status: str
     finished: bool
     passed: bool | None
     reason: str | None
     failed_thresholds: list[dict[str, Any]]
+    summary: dict[str, Any] | None = None  # steady-state p95/p99, error rate, req/s
+    new_findings: list[VerdictFinding] = []
+    url: str | None = None
 
 
 def out(r: service.Run) -> RunOut:
@@ -202,6 +215,19 @@ async def verdict(run_id: uuid.UUID, ctx: CtxDep) -> VerdictOut:
     """CI-friendly verdict (FR-32): poll until ``finished`` and gate on ``passed``."""
     run = await _load(ctx, run_id)
     finished = run.status in ("passed", "failed", "invalid", "cancelled", "errored", "rejected")
+    new = []
+    if finished:
+        from reliability.modules.findings.models import Finding
+
+        new = [
+            VerdictFinding(id=f.id, type=f.type, severity=f.severity, title=f.title)
+            for f in (
+                await ctx.session.execute(
+                    select(Finding).where(Finding.first_run_id == run.id).order_by(Finding.severity)
+                )
+            ).scalars()
+        ]
+    web = get_settings().web_base_url.rstrip("/")
     return VerdictOut(
         run_id=run.id,
         status=run.status,
@@ -209,6 +235,9 @@ async def verdict(run_id: uuid.UUID, ctx: CtxDep) -> VerdictOut:
         passed=(run.status == "passed") if finished else None,
         reason=run.status_reason,
         failed_thresholds=(run.summary or {}).get("failed_thresholds", []),
+        summary=(run.summary or {}).get("steady_state"),
+        new_findings=new,
+        url=f"{web}/projects/{run.project_id}/runs/{run.id}",
     )
 
 

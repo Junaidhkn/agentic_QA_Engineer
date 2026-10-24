@@ -20,6 +20,7 @@ It never claims complete coverage or guaranteed fixes, never merges, and never d
 | `packages/workflow-ir/` | JSON Schema for the Workflow IR shared by Python and TypeScript |
 | `runners/images/` | Container images used by the runner (k6, Playwright, build, scanners) |
 | `benchmarks/` | Seeded-defect reference apps and the evaluation harness |
+| `examples/ci/` | CI gating: a portable script and a GitHub Actions example that fail a build on a failed verdict |
 | `infra/` | Terraform (AWS) and Packer (runner hosts) |
 | `deploy/local/` | docker-compose stack for local development |
 

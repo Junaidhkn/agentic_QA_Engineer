@@ -28,7 +28,7 @@ from langgraph.graph import END, START, StateGraph
 from reliability.agents.common.budget import GraphBudget
 from reliability.agents.common.checkpoint import checkpointer
 from reliability.agents.common.untrusted import payload, wrap
-from reliability.agents.discovery import criticality, prompts, stack, synthesis
+from reliability.agents.discovery import criticality, explore_ui, prompts, stack, synthesis
 from reliability.agents.discovery import openapi as openapi_mod
 from reliability.agents.discovery import routes as routes_mod
 from reliability.agents.discovery.snapshot import CodeSnapshot
@@ -127,14 +127,22 @@ def build(deps: DiscoveryDeps) -> StateGraph:
         await deps.ports.progress("detect_stack", {"frameworks": detected["frameworks"]})
         return {"stack": detected}
 
+    async def _exploration() -> dict[str, Any] | None:
+        getter = getattr(deps.ports, "exploration", None)
+        return await getter() if getter else None
+
     async def extract_routes(state: DiscoveryState) -> DiscoveryState:
         st = stack.Stack(apps=[stack.App(**a) for a in state["stack"]["apps"]])
-        found = routes_mod.extract(await _snapshot(), st)
+        found = [r.to_dict() for r in routes_mod.extract(await _snapshot(), st)]
+        explored = await _exploration()
+        if explored:
+            found = explore_ui.merge_routes(found, explored)
+            await deps.ports.progress("explore_ui", explore_ui.summary(explored))
         await deps.ports.progress(
             "extract_routes",
-            {"api": sum(r.kind == "api" for r in found), "pages": sum(r.kind == "page" for r in found)},
+            {"api": sum(r["kind"] == "api" for r in found), "pages": sum(r["kind"] == "page" for r in found)},
         )
-        return {"routes": [r.to_dict() for r in found]}
+        return {"routes": found}
 
     async def import_openapi(state: DiscoveryState) -> DiscoveryState:
         ops: list[dict[str, Any]] = []
@@ -154,19 +162,29 @@ def build(deps: DiscoveryDeps) -> StateGraph:
     async def synthesize_baseline(state: DiscoveryState) -> DiscoveryState:
         ops = [openapi_mod.Operation(**o) for o in state.get("operations", [])]
         candidates = synthesis.synthesize(_routes(state), ops, await _snapshot(), await deps.ports.secret_names())
-        await deps.ports.progress("synthesize", {"baseline": len(candidates)})
-        return {
-            "candidates": [
-                {
-                    "ir": c.ir,
-                    "confidence": c.confidence,
-                    "data_write": c.data_write,
-                    "source": c.source,
-                    "origin": "rules",
-                }
-                for c in candidates
+        out: list[dict[str, Any]] = [
+            {
+                "ir": c.ir,
+                "confidence": c.confidence,
+                "data_write": c.data_write,
+                "source": c.source,
+                "origin": "rules",
+            }
+            for c in candidates
+        ]
+        explored = await _exploration()
+        if explored:
+            creds: dict[str, Any] = dict(explored.get("credential_refs") or {})
+            keys = {c["ir"]["key"] for c in out}
+            out += [
+                c
+                for c in explore_ui.candidates(explored, creds.get("username"), creds.get("password"))
+                if c["ir"]["key"] not in keys
             ]
-        }
+        await deps.ports.progress(
+            "synthesize", {"baseline": len(candidates), "exploration": len(out) - len(candidates)}
+        )
+        return {"candidates": out}
 
     async def synthesize_llm(state: DiscoveryState) -> DiscoveryState:
         llm: dict[str, Any] = {"prompt": prompts.SYNTHESIZE_VERSION, "accepted": 0, "rejected": [], "errors": []}

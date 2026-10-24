@@ -21,11 +21,24 @@ router = APIRouter(tags=["discovery"])
 MAX_OPENAPI_BYTES = 5 * 1024 * 1024
 
 
+class ExplorationIn(BaseModel):
+    """Bounded browser exploration of a verified target (FR-8)."""
+
+    model_config = ConfigDict(extra="forbid")
+    target_id: uuid.UUID
+    action_budget: int = Field(default=150, ge=1, le=500)
+    time_budget_s: int = Field(default=900, ge=30, le=1800)
+    start_path: str = Field(default="/", pattern="^/", max_length=300)
+    username_secret: str | None = Field(default=None, pattern="^[A-Z][A-Z0-9_]{1,63}$")
+    password_secret: str | None = Field(default=None, pattern="^[A-Z][A-Z0-9_]{1,63}$")
+
+
 class DiscoveryCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     commit_ref: str | None = Field(default=None, max_length=200)
     openapi_spec_ids: list[uuid.UUID] = Field(default_factory=list, max_length=10)
     archive_artifact_id: uuid.UUID | None = None
+    browser_exploration: ExplorationIn | None = None
 
 
 class DiscoveryOut(BaseModel):
@@ -92,6 +105,7 @@ async def start_discovery(
         commit_ref=body.commit_ref,
         openapi_spec_ids=body.openapi_spec_ids,
         archive_artifact_id=body.archive_artifact_id,
+        browser_exploration=body.browser_exploration.model_dump(mode="json") if body.browser_exploration else None,
     )
     out = _out(run).model_dump(mode="json")
     await idempotency.store(ctx.session, project.org_id, key, payload, 202, out)

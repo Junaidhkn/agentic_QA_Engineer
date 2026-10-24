@@ -18,6 +18,7 @@ from runner_agent.drivers.base import CommandSpec, Egress
 
 PASSTHROUGH_ENV = (
     "PATH",
+    "NODE_PATH",
     "HOME",
     "PLAYWRIGHT_BROWSERS_PATH",
     "LANG",
@@ -83,6 +84,8 @@ class ProcessDriver:
             if not link.exists():
                 link.symlink_to(pw_dir / "node_modules", target_is_directory=True)
             argv = ["node", str(pw_dir / "node_modules" / "@playwright" / "test" / "cli.js"), *spec.args]
+        elif spec.tool == "explorer":
+            argv = ["node", str(Path(self.config.playwright_dir).resolve() / "explore.cjs"), *spec.args]
         else:
             raise ValueError(f"unknown tool {spec.tool}")
         env = {k: v for k, v in os.environ.items() if k in PASSTHROUGH_ENV}

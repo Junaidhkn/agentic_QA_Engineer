@@ -36,6 +36,7 @@ SYSTEM_SESSION_ALLOWED = (
     "reliability.modules.notifications",
     "reliability.cli",
     "reliability.modules.telemetry",
+    "reliability.modules.reports",  # public share-link lookup by token hash only
 )
 
 

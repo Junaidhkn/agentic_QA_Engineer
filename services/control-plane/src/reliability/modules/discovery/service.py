@@ -18,6 +18,8 @@ from reliability.modules.discovery.models import AgentThread, DiscoveryRun, Open
 from reliability.modules.identity.service import Principal
 from reliability.modules.integrations.github import service as github
 from reliability.modules.projects.models import Project
+from reliability.modules.quotas import service as quotas
+from reliability.modules.secrets import service as secrets
 from reliability.modules.workflows.models import Workflow
 from reliability.platform import outbox
 from reliability.platform.errors import AppError
@@ -116,6 +118,7 @@ async def start(
     commit_ref: str | None,
     openapi_spec_ids: list[uuid.UUID],
     archive_artifact_id: uuid.UUID | None,
+    browser_exploration: dict[str, Any] | None = None,
 ) -> DiscoveryRun:
     active = (
         await session.execute(
@@ -132,8 +135,11 @@ async def start(
         options["archive_artifact_id"] = str(art.id)
     else:
         repo = await github.repository_for_project(session, project.id)
-        if repo is None and not openapi_spec_ids:
-            raise AppError("CONFLICT", "connect a repository, upload a source archive or register an OpenAPI spec")
+        if repo is None and not openapi_spec_ids and not browser_exploration:
+            raise AppError(
+                "CONFLICT",
+                "connect a repository, upload a source archive, register an OpenAPI spec or explore a verified target",
+            )
         if repo is not None:
             options["repository_id"] = str(repo.id)
             options["commit_ref"] = commit_ref or repo.default_branch
@@ -141,6 +147,22 @@ async def start(
         spec = await session.get(OpenAPISpec, spec_id)
         if spec is None or spec.project_id != project.id:
             raise AppError("NOT_FOUND", f"OpenAPI spec {spec_id} not found")
+    target_id = None
+    if browser_exploration:
+        from reliability.modules.targets import service as targets
+
+        await quotas.require_feature(session, project.org_id, "browser_exploration", "Browser exploration")
+        target = await targets.get(session, uuid.UUID(str(browser_exploration["target_id"])))
+        if target.project_id != project.id:
+            raise AppError("NOT_FOUND", "target not found")
+        if not target.is_runnable:
+            raise AppError("TARGET_NOT_VERIFIED", "browser exploration needs a verified target")
+        names = {x.name for x in await secrets.list_names(session, project.id)}
+        for key in ("username_secret", "password_secret"):
+            if browser_exploration.get(key) and browser_exploration[key] not in names:
+                raise AppError("NOT_FOUND", f"project secret {browser_exploration[key]} not found")
+        target_id = target.id
+        options["exploration"] = {k: v for k, v in browser_exploration.items() if k != "target_id"}
     run_id = uuid7()
     run = DiscoveryRun(
         id=run_id,
@@ -148,6 +170,7 @@ async def start(
         project_id=project.id,
         commit_sha=ARCHIVE_SHA,
         options=options,
+        target_id=target_id,
         status="queued",
         progress=[],
         agent_thread_id=f"discovery:{run_id}",

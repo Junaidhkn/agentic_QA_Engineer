@@ -47,3 +47,5 @@ export interface Coverage {
 }
 export interface SeriesPoint { t: number; vus: number; rps: number; error_rate: number; p50_ms: number | null; p95_ms: number | null; p99_ms: number | null }
 export interface RunMetrics { scope: string; scopes: string[]; points: SeriesPoint[]; steady_state: { window_s: [number, number] } | null }
+export type Report = S["ReportOut"];
+export type ReportShare = S["ShareOut"];

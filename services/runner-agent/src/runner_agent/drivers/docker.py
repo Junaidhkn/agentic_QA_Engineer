@@ -107,6 +107,8 @@ def run_args(config: Config, job_id: str, spec: CommandSpec, env_file: Path | No
         args += ["--env-file", str(env_file)]
     if spec.tool == "k6":
         args += [image, *spec.args]
+    elif spec.tool == "explorer":
+        args += [image, "node", "/opt/re/explore.cjs", *spec.args]
     else:
         args += [image, "node", "/opt/re/node_modules/@playwright/test/cli.js", *spec.args]
     return args

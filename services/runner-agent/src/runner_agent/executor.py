@@ -206,6 +206,8 @@ class JobRunner:
             return self._run_sandbox_build()
         if job_type == "repair_check":
             return self._run_checks(lease, state)
+        if job_type == "ui_explore":
+            return self._run_explore(lease, workdir, env, secrets, limits, state)
         raise ValueError(f"unsupported job type {job_type}")
 
     # ------------------------------------------------------------ helpers ----
@@ -461,6 +463,42 @@ class JobRunner:
                 outcomes.append({"exit_code": code, "log_tail": log_tail if code else None})
             results[case["id"]] = outcomes
         state.result = {"validation": results}
+
+    # ---------------------------------------------------- browser exploration ----
+    async def _run_explore(
+        self,
+        lease: dict[str, Any],
+        workdir: Path,
+        env: dict[str, str],
+        secrets: dict[str, str],
+        limits: Limits,
+        state: JobState,
+    ) -> None:
+        """Bounded crawl of the verified target (FR-8). Test credentials arrive sealed and are
+        written only into the explorer's config inside the job's working directory."""
+        explore = dict(lease.get("explore") or {})
+        cfg = {
+            **explore,
+            "base_url": env.get("BASE_URL") or explore.get("base_url"),
+            "credentials": {
+                "username": secrets.get(explore.get("username_secret", ""), ""),
+                "password": secrets.get(explore.get("password_secret", ""), ""),
+            },
+        }
+        out_dir = workdir / "explore"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "config.json").write_text(json.dumps(cfg))
+        handle = await self.driver.start(
+            lease["lease_id"],
+            self._spec("explorer", ["config.json", "exploration.json"], out_dir, env, {}, limits),
+        )
+        state.exit_codes["explorer"] = await self._supervise(handle, state, limits.cpu)
+        (out_dir / "config.json").unlink(missing_ok=True)
+        try:
+            result = json.loads((out_dir / "exploration.json").read_text())
+        except (OSError, ValueError):
+            result = {"error": _tail_text(out_dir / "explorer.log") or "the explorer produced no result"}
+        state.result["exploration"] = result
 
     # ------------------------------------------------------- repair checks ----
     async def _run_checks(self, lease: dict[str, Any], state: JobState) -> None:

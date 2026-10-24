@@ -95,8 +95,18 @@ flowchart TD
 | `[[interrupt]]` | human | candidates → approvals | UI shows source + confidence; nothing is tested until approved |
 
 > **As built (Phase 5, see plan.md deviations):** the graph ends at `persist` (status
-> `awaiting_review`); review happens in the workflows UI. `explore_ui` arrives with browser
-> exploration in Phase 9. Every model step has a deterministic baseline it degrades to.
+> `awaiting_review`); review happens in the workflows UI. Every model step has a deterministic
+> baseline it degrades to.
+>
+> **As built (Phase 9):** `explore_ui` is not an LLM-driven node. When a discovery asks for
+> browser exploration, the job first queues a `ui_explore` runner job and returns; the runner
+> crawls the verified target with a deterministic, bounded Playwright explorer
+> (`runners/images/playwright/explore.cjs`: same-origin guard, action and time budgets,
+> separate action and link denylists, payment forms never filled, skipped actions recorded),
+> and its completion re-enqueues discovery. `extract_routes` then merges crawled pages and
+> observed API calls into the routes, and `synthesize_baseline` turns successfully submitted
+> forms into browser candidates (`agents/discovery/explore_ui.py`) that the model step and
+> human review see like any other candidate.
 
 Coverage accounting: `discovered` = candidates; `approved`; `tested` = approved with ≥ 1
 valid test case; `passing` = last run passed. Reported as numbers, never as a percentage of

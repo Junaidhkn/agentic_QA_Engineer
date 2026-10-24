@@ -16,11 +16,13 @@ from reliability.agents.discovery.snapshot import CodeSnapshot, from_archive
 from reliability.llm import get_gateway
 from reliability.modules.artifacts import service as artifacts
 from reliability.modules.artifacts.models import Artifact
+from reliability.modules.discovery import exploration as explore_jobs
 from reliability.modules.discovery.models import DiscoveryRun, OpenAPISpec
 from reliability.modules.discovery.service import ARCHIVE_SHA
 from reliability.modules.integrations.github import service as github
 from reliability.modules.integrations.github.models import Repository
 from reliability.modules.quotas.llm_sink import LedgerUsageSink
+from reliability.modules.runs.models import ExecutionJob
 from reliability.modules.secrets import service as secrets
 from reliability.modules.tenancy.models import Organization
 from reliability.modules.workflows import service as workflows
@@ -76,6 +78,20 @@ class RunPorts:
                 if art is not None:
                     docs.append(artifacts.read(art).decode("utf-8", errors="replace"))
         return docs
+
+    async def exploration(self) -> dict[str, Any] | None:
+        job_id = (self.options.get("exploration") or {}).get("job_id")
+        if not job_id:
+            return None
+        async with self._tx() as s:
+            result = explore_jobs.result_of(await s.get(ExecutionJob, uuid.UUID(job_id)))
+        if result is not None:
+            opts = self.options.get("exploration") or {}
+            result["credential_refs"] = {
+                "username": opts.get("username_secret"),
+                "password": opts.get("password_secret"),
+            }
+        return result
 
     async def secret_names(self) -> set[str]:
         async with self._tx() as s:
@@ -136,6 +152,21 @@ async def run_discovery(payload: dict[str, Any]) -> None:
         org = await s.get(Organization, org_id)
         llm_enabled = bool(org and org.llm_code_context_enabled) and not await is_enabled(s, LLM_DISABLED_FLAG, org_id)
         run.status = "running"
+        explore = run.options.get("exploration")
+        if explore is not None and not explore.get("job_id"):
+            # Stage 1: crawl the verified target on the execution plane; the job's completion
+            # re-enqueues this job, which then continues with the crawl result.
+            jb = await explore_jobs.enqueue(s, run)
+            run.options = {**run.options, "exploration": {**explore, "job_id": str(jb.id)}}
+            run.progress = [
+                *run.progress,
+                {"step": "explore_ui", "at": datetime.now(UTC).isoformat(), "status": "queued"},
+            ]
+            return
+        if explore is not None:
+            explore_job = await s.get(ExecutionJob, uuid.UUID(explore["job_id"]))
+            if explore_job is not None and explore_job.status not in ("completed", "failed"):
+                return
         ports = RunPorts(run)
         thread_id = run.agent_thread_id or f"discovery:{run_id}"
     budget = GraphBudget.for_graph("discovery")

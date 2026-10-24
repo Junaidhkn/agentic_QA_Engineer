@@ -35,6 +35,7 @@ class Config(BaseSettings):
         "sandbox_build",
         "sandbox_env",
         "repair_check",
+        "ui_explore",
     ]
     # Sandboxes (ADR-0011)
     sandbox_postgres_url: str | None = None  # process sandbox: admin DSN for ephemeral databases (local/test)

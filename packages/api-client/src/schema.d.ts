@@ -658,6 +658,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/projects/{project_id}/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Reports */
+        get: operations["list_reports_v1_projects__project_id__reports_get"];
+        put?: never;
+        /** Create Report */
+        post: operations["create_report_v1_projects__project_id__reports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects/{project_id}/repository": {
         parameters: {
             query?: never;
@@ -921,6 +939,44 @@ export interface paths {
         /** Cancel Repair */
         post: operations["cancel_repair_v1_repairs__attempt_id__cancel_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reports/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Report */
+        get: operations["get_report_v1_reports__report_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reports/{report_id}/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Share Report
+         * @description Create or replace the share link (shown once). Anyone with the link can read the report.
+         */
+        post: operations["share_report_v1_reports__report_id__share_post"];
+        /** Revoke Share */
+        delete: operations["revoke_share_v1_reports__report_id__share_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1606,6 +1662,7 @@ export interface components {
         DiscoveryCreate: {
             /** Archive Artifact Id */
             archive_artifact_id?: string | null;
+            browser_exploration?: components["schemas"]["ExplorationIn"] | null;
             /** Commit Ref */
             commit_ref?: string | null;
             /** Openapi Spec Ids */
@@ -1703,6 +1760,36 @@ export interface components {
             } | null;
             /** Summary */
             summary: string;
+        };
+        /**
+         * ExplorationIn
+         * @description Bounded browser exploration of a verified target (FR-8).
+         */
+        ExplorationIn: {
+            /**
+             * Action Budget
+             * @default 150
+             */
+            action_budget: number;
+            /** Password Secret */
+            password_secret?: string | null;
+            /**
+             * Start Path
+             * @default /
+             */
+            start_path: string;
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+            /**
+             * Time Budget S
+             * @default 900
+             */
+            time_budget_s: number;
+            /** Username Secret */
+            username_secret?: string | null;
         };
         /** FeedbackIn */
         FeedbackIn: {
@@ -2365,6 +2452,47 @@ export interface components {
             /** Private */
             private: boolean;
         };
+        /** ReportIn */
+        ReportIn: {
+            /** From */
+            from?: string | null;
+            /** Sections */
+            sections?: string[] | null;
+            /** To */
+            to?: string | null;
+        };
+        /** ReportOut */
+        ReportOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Html Url */
+            html_url?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Json Url */
+            json_url?: string | null;
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Share Expires At */
+            share_expires_at: string | null;
+            /** Shared */
+            shared: boolean;
+            /** Status */
+            status: string;
+        };
         /** RoleIn */
         RoleIn: {
             /**
@@ -2470,6 +2598,24 @@ export interface components {
             name: string;
             /** Rotated At */
             rotated_at: string | null;
+        };
+        /** ShareIn */
+        ShareIn: {
+            /**
+             * Expires In Days
+             * @default 7
+             */
+            expires_in_days: number;
+        };
+        /** ShareOut */
+        ShareOut: {
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Url */
+            url: string;
         };
         /** Slo */
         Slo: {
@@ -2618,7 +2764,24 @@ export interface components {
             /** Error Type */
             type: string;
         };
-        /** VerdictOut */
+        /** VerdictFinding */
+        VerdictFinding: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Severity */
+            severity: string;
+            /** Title */
+            title: string;
+            /** Type */
+            type: string;
+        };
+        /**
+         * VerdictOut
+         * @description CI contract (FR-32, additive within /v1): gate on ``passed`` once ``finished``.
+         */
         VerdictOut: {
             /** Failed Thresholds */
             failed_thresholds: {
@@ -2626,6 +2789,11 @@ export interface components {
             }[];
             /** Finished */
             finished: boolean;
+            /**
+             * New Findings
+             * @default []
+             */
+            new_findings: components["schemas"]["VerdictFinding"][];
             /** Passed */
             passed: boolean | null;
             /** Reason */
@@ -2637,6 +2805,12 @@ export interface components {
             run_id: string;
             /** Status */
             status: string;
+            /** Summary */
+            summary?: {
+                [key: string]: unknown;
+            } | null;
+            /** Url */
+            url?: string | null;
         };
         /** VerificationOut */
         VerificationOut: {
@@ -4548,6 +4722,77 @@ export interface operations {
             };
         };
     };
+    list_reports_v1_projects__project_id__reports_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_report_v1_projects__project_id__reports_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "idempotency-key"?: string | null;
+                authorization?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_link_v1_projects__project_id__repository_get: {
         parameters: {
             query?: never;
@@ -5311,6 +5556,107 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RepairOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_report_v1_reports__report_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    share_report_v1_reports__report_id__share_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShareIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_share_v1_reports__report_id__share_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
