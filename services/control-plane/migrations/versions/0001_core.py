@@ -13,7 +13,6 @@ def _sql(statement: str) -> None:
     """Run raw SQL without bind-parameter parsing (DDL contains ':' and '%')."""
     op.get_bind().exec_driver_sql(statement)
 
-
 revision = "0001_core"
 down_revision = None
 branch_labels = None
@@ -23,41 +22,12 @@ SQL = Path(__file__).resolve().parent.parent / "sql" / "0001_core.sql"
 
 # Tables with a NOT NULL org_id column and the standard tenant policy.
 TENANT_TABLES = [
-    "invitations",
-    "api_keys",
-    "projects",
-    "github_installations",
-    "repositories",
-    "targets",
-    "project_secrets",
-    "ingest_tokens",
-    "openapi_specs",
-    "discovery_runs",
-    "workflows",
-    "test_suites",
-    "test_cases",
-    "load_profiles",
-    "runs",
-    "run_events",
-    "run_metric_summaries",
-    "runner_leases",
-    "execution_jobs",
-    "artifacts",
-    "findings",
-    "evidence",
-    "diagnoses",
-    "hypotheses",
-    "hypothesis_evidence",
-    "repair_attempts",
-    "verification_gates",
-    "performance_comparisons",
-    "pull_requests",
-    "reports",
-    "approvals",
-    "idempotency_keys",
-    "usage_ledger",
-    "llm_usage",
-    "agent_threads",
+    "invitations", "api_keys", "projects", "github_installations", "repositories", "targets",
+    "project_secrets", "ingest_tokens", "openapi_specs", "discovery_runs", "workflows", "test_suites",
+    "test_cases", "load_profiles", "runs", "run_events", "run_metric_summaries", "runner_leases",
+    "execution_jobs", "artifacts", "findings", "evidence", "diagnoses", "hypotheses", "hypothesis_evidence",
+    "repair_attempts", "verification_gates", "performance_comparisons", "pull_requests", "reports",
+    "approvals", "idempotency_keys", "usage_ledger", "llm_usage", "agent_threads",
 ]
 # Readable by the app role, writable only by the system role.
 APP_READ_ONLY = ["plans"]
