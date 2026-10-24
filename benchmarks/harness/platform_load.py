@@ -84,38 +84,61 @@ async def _submit(client: httpx.AsyncClient, lane: Lane, kind: str, tracker: Tra
     return str(run["id"])
 
 
-async def _wait(client: httpx.AsyncClient, lane: Lane, run_id: str, tracker: Tracker, poll_s: float) -> dict[str, Any]:
+async def _wait(
+    client: httpx.AsyncClient, lane: Lane, run_id: str, tracker: Tracker, poll_s: float, give_up_at: float
+) -> dict[str, Any]:
+    """Poll until the run ends; a run that disappears or outlives ``give_up_at`` is a platform failure."""
+    missing = 0
     while True:
         r = await client.get(f"/v1/runs/{run_id}", headers=lane.headers())
         if r.status_code == 200:
+            missing = 0
             tracker.runs[run_id] = {"lane": lane.target_id, **r.json()}
             if r.json()["status"] in TERMINAL or r.json()["status"] == "pending_approval":
                 return tracker.runs[run_id]
+        elif r.status_code == 404:
+            missing += 1
+            if missing >= 3:
+                tracker.runs[run_id] = {**tracker.runs.get(run_id, {}), "status": "lost"}
+                return tracker.runs[run_id]
+        if time.monotonic() > give_up_at:
+            tracker.runs[run_id] = {**tracker.runs.get(run_id, {}), "status": "timed_out"}
+            return tracker.runs[run_id]
         await asyncio.sleep(poll_s)
 
 
 async def _load_lane(
-    client: httpx.AsyncClient, lane: Lane, deadline: float, tracker: Tracker, poll_s: float
+    client: httpx.AsyncClient, lane: Lane, deadline: float, tracker: Tracker, poll_s: float, give_up_at: float
 ) -> None:
     while time.monotonic() < deadline:
         run_id = await _submit(client, lane, "load", tracker)
         if run_id is None:
             await asyncio.sleep(poll_s * 2)
             continue
-        if (await _wait(client, lane, run_id, tracker, poll_s))["status"] == "pending_approval":
+        if (await _wait(client, lane, run_id, tracker, poll_s, give_up_at))["status"] in (
+            "pending_approval",
+            "lost",
+            "timed_out",
+        ):
             return
 
 
 async def _functional_arrivals(
-    client: httpx.AsyncClient, lanes: list[Lane], per_hour: float, deadline: float, tracker: Tracker, poll_s: float,
+    client: httpx.AsyncClient,
+    lanes: list[Lane],
+    per_hour: float,
+    deadline: float,
+    tracker: Tracker,
+    poll_s: float,
     rng: random.Random,
+    give_up_at: float,
 ) -> None:
     waits: list[asyncio.Task[Any]] = []
     while per_hour > 0 and time.monotonic() < deadline:
         lane = rng.choice(lanes)
         run_id = await _submit(client, lane, "functional", tracker)
         if run_id is not None:
-            waits.append(asyncio.create_task(_wait(client, lane, run_id, tracker, poll_s)))
+            waits.append(asyncio.create_task(_wait(client, lane, run_id, tracker, poll_s, give_up_at)))
         await asyncio.sleep(rng.expovariate(per_hour / 3600.0))  # Poisson arrivals
     await asyncio.gather(*waits)
 
@@ -140,7 +163,9 @@ def summarize(tracker: Tracker, minutes: float, lanes: int, per_hour: float) -> 
         else:
             by_kind.setdefault(run["kind"], []).append(s)
         reason = (run.get("status_reason") or "").lower()
-        if run["status"] == "errored" and any(p in reason for p in PLATFORM_ERRORS):
+        if run["status"] in ("lost", "timed_out"):
+            platform_errors.append({"run_id": run.get("id"), "reason": run["status"]})
+        elif run["status"] == "errored" and any(p in reason for p in PLATFORM_ERRORS):
             platform_errors.append({"run_id": run["id"], "reason": run.get("status_reason")})
     every = [v for vs in by_kind.values() for v in vs]
     p95 = percentile(every, 0.95)
@@ -180,7 +205,8 @@ def markdown(report: dict[str, Any]) -> str:
         *[f"| {k} | {v['n']} | {fmt(v['p50'])} | {fmt(v['p95'])} | {fmt(v['max'])} |" for k, v in js.items()],
         "",
         f"Statuses: {', '.join(f'{k} {v}' for k, v in sorted(report['statuses'].items()))}. "
-        f"Platform errors: {len(report['platform_errors'])}. Rejected submissions: {len(report['rejected_submissions'])}.",
+        f"Platform errors: {len(report['platform_errors'])}. "
+        f"Rejected submissions: {len(report['rejected_submissions'])}.",
         "",
         f"**{'PASS' if report['passed'] else 'FAIL'}** — p95 job start {fmt(js['all']['p95'])} "
         f"(target < {report['slo']['p95_target_s']:g} s).",
@@ -196,14 +222,16 @@ async def run(
     functional_per_hour: float,
     poll_s: float = 2.0,
     seed: int = 7,
+    settle_minutes: float = 30,
 ) -> dict[str, Any]:
     tracker = Tracker()
     deadline = time.monotonic() + minutes * 60
+    give_up_at = deadline + settle_minutes * 60  # runs still unfinished by then count as failures
     rng = random.Random(seed)
     async with httpx.AsyncClient(base_url=api_url, timeout=30) as client:
         await asyncio.gather(
-            *(_load_lane(client, lane, deadline, tracker, poll_s) for lane in lanes),
-            _functional_arrivals(client, lanes, functional_per_hour, deadline, tracker, poll_s, rng),
+            *(_load_lane(client, lane, deadline, tracker, poll_s, give_up_at) for lane in lanes),
+            _functional_arrivals(client, lanes, functional_per_hour, deadline, tracker, poll_s, rng, give_up_at),
         )
     return summarize(tracker, minutes, len(lanes), functional_per_hour)
 
@@ -215,12 +243,19 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--minutes", type=float, default=60)
     p.add_argument("--functional-per-hour", type=float, default=100)
     p.add_argument("--poll-seconds", type=float, default=5)
+    p.add_argument("--settle-minutes", type=float, default=30, help="how long to wait for runs after the window")
     p.add_argument("--out", type=Path, default=Path(__file__).resolve().parents[1] / "out")
     args = p.parse_args(argv)
     lanes = [Lane(**entry) for entry in json.loads(args.lanes.read_text())]
     report = asyncio.run(
-        run(args.api_url, lanes, minutes=args.minutes, functional_per_hour=args.functional_per_hour,
-            poll_s=args.poll_seconds)
+        run(
+            args.api_url,
+            lanes,
+            minutes=args.minutes,
+            functional_per_hour=args.functional_per_hour,
+            poll_s=args.poll_seconds,
+            settle_minutes=args.settle_minutes,
+        )
     )
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "platform-load.json").write_text(json.dumps(report, indent=2) + "\n")

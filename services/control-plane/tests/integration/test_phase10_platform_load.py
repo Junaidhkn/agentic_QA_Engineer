@@ -93,7 +93,9 @@ async def test_platform_load_harness_meets_job_start_slo_at_small_scale(
             workers.append(asyncio.create_task(serve(cfg, stop, LeaseClient(cfg))))
         drainer = asyncio.create_task(_drain_forever(stop))
         try:
-            report = await harness.run(live_api, lanes, minutes=1.0, functional_per_hour=360, poll_s=1.0)
+            report = await harness.run(
+                live_api, lanes, minutes=1.0, functional_per_hour=360, poll_s=1.0, settle_minutes=3
+            )
         finally:
             stop.set()
             await asyncio.gather(*workers, drainer, return_exceptions=True)
