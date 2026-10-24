@@ -1,10 +1,11 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 
 import { Badge, Button, Card, ErrorNote, fmtDate } from "@/components/ui";
 import { apiFetch, newIdempotencyKey } from "@/lib/api";
-import type { Diagnosis, Hypothesis } from "@/lib/types";
+import type { Diagnosis, Hypothesis, Repair } from "@/lib/types";
 
 const ACTIVE = new Set(["queued", "collecting", "hypothesizing", "checking", "experimenting"]);
 const PHASE: Record<string, string> = {
@@ -20,7 +21,7 @@ const CHECK_TONE: Record<string, "ok" | "warn" | "danger"> = { verified: "ok", u
 type Experiment = { name?: string; result?: string; summary?: string } | null;
 
 /** Diagnosis for one finding: start/re-run, live phase, ranked hypotheses with their verified citations. */
-export function DiagnosisPanel({ findingId, canRun }: { findingId: string; canRun: boolean }) {
+export function DiagnosisPanel({ findingId, canRun, projectId }: { findingId: string; canRun: boolean; projectId: string }) {
   const qc = useQueryClient();
   const list = useQuery({
     queryKey: ["diagnoses", findingId],
@@ -75,7 +76,7 @@ export function DiagnosisPanel({ findingId, canRun }: { findingId: string; canRu
             {d.model_info && <span>· {String(d.model_info.citations_verified ?? 0)}/{String(d.model_info.citations_proposed ?? 0)} citations verified · {String(d.model_info.tool_calls ?? 0)} tool calls</span>}
           </p>
           {(d.hypotheses ?? []).length === 0 && <p className="text-sm">No hypothesis could be backed by verified evidence. See the next steps below.</p>}
-          {(d.hypotheses ?? []).map((h) => <HypothesisCard key={h.id} h={h} canRun={canRun} onFeedback={onFeedback} />)}
+          {(d.hypotheses ?? []).map((h) => <HypothesisCard key={h.id} h={h} canRun={canRun} onFeedback={onFeedback} projectId={projectId} />)}
           {d.next_steps.length > 0 && (
             <div>
               <h4 className="text-sm font-medium">Suggested next steps</h4>
@@ -89,8 +90,13 @@ export function DiagnosisPanel({ findingId, canRun }: { findingId: string; canRu
   );
 }
 
-function HypothesisCard({ h, canRun, onFeedback }: { h: Hypothesis; canRun: boolean; onFeedback: () => void }) {
+function HypothesisCard({ h, canRun, onFeedback, projectId }: { h: Hypothesis; canRun: boolean; onFeedback: () => void; projectId: string }) {
   const f = h.confidence_factors;
+  const router = useRouter();
+  const repair = useMutation({
+    mutationFn: () => apiFetch<Repair>(`/v1/hypotheses/${h.id}/repairs`, { method: "POST", idempotencyKey: newIdempotencyKey(), body: JSON.stringify({}) }),
+    onSuccess: (r) => router.push(`/projects/${projectId}/repairs/${r.id}`),
+  });
   const exp = (f.experiment ?? null) as Experiment;
   const feedback = useMutation({
     mutationFn: (verdict: string) => apiFetch(`/v1/hypotheses/${h.id}/feedback`, { method: "POST", body: JSON.stringify({ verdict }) }),
@@ -142,6 +148,11 @@ function HypothesisCard({ h, canRun, onFeedback }: { h: Hypothesis; canRun: bool
             </Button>
           ))}
           <ErrorNote error={feedback.error} />
+          <Button variant="secondary" className="ml-auto text-xs" disabled={repair.isPending} onClick={() => repair.mutate()}
+            title="An agent writes a regression test and a fix; an independent pipeline verifies it before you review it">
+            Propose a fix
+          </Button>
+          <ErrorNote error={repair.error} />
         </div>
       )}
     </article>

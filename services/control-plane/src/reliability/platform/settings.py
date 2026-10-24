@@ -92,6 +92,16 @@ class Settings(BaseSettings):
     runner_long_poll_seconds: int = 20
     egress_ips: list[str] = Field(default_factory=list)
 
+    # Verification pipeline (ADR-0016) and repair agent sandboxes
+    verification_load_runs_per_side: int = 3
+    verification_load_hold_s: int = 90
+    verification_load_settle_s: int = 30
+    verification_probe_runs: int = 5
+    verification_bootstrap_iterations: int = 10_000
+    # Error-finding fixes may cost a little latency (e.g. a retry): accepted p95 increase.
+    verification_error_fix_latency_budget_ms: float = 25.0
+    repair_check_timeout_s: int = 600
+
     # Email
     email_provider: Literal["log", "ses"] = "log"
     email_from: str = "Reliability Engineer <no-reply@localhost>"

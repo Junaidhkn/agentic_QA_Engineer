@@ -3,7 +3,12 @@ short-lived ``code_snapshot`` artifact (24 h) that the runner downloads with a p
 
 from __future__ import annotations
 
+import io
+import tarfile
+import time
 import uuid
+import zipfile
+from pathlib import PurePosixPath
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,3 +63,38 @@ async def fetch(
         content_type="application/gzip",
     )
     return sha, art, from_archive(data)
+
+
+def overlay_archive(data: bytes, files: dict[str, str | None]) -> bytes:
+    """A .tar.gz of the source in ``data`` (tar or zip; a single top-level directory is stripped)
+    with ``files`` applied: path -> new content, or None to delete. Used to build the base,
+    test and patched variants of a repair without touching the repository."""
+    members: dict[str, tuple[bytes, int]] = {}
+    if data[:2] == b"PK":
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            for info in zf.infolist():
+                if not info.is_dir():
+                    members[info.filename] = (zf.read(info), 0o644)
+    else:
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as tf:
+            for m in tf.getmembers():
+                fh = tf.extractfile(m) if m.isfile() else None
+                if fh is not None:
+                    members[m.name] = (fh.read(), m.mode & 0o755 or 0o644)
+    names = [n for n in members if not PurePosixPath(n).name.startswith("._")]
+    tops = {PurePosixPath(n).parts[0] for n in names if PurePosixPath(n).parts}
+    strip = next(iter(tops)) + "/" if len(tops) == 1 and all("/" in n for n in names) else ""
+    tree = {n.removeprefix(strip): members[n] for n in names}
+    for path, content in files.items():
+        if content is None:
+            tree.pop(path, None)
+        else:
+            tree[path] = (content.encode(), tree.get(path, (b"", 0o644))[1])
+    out = io.BytesIO()
+    with tarfile.open(fileobj=out, mode="w:gz") as tf:
+        for name in sorted(tree):
+            body, mode = tree[name]
+            entry = tarfile.TarInfo(name)
+            entry.size, entry.mode, entry.mtime = len(body), mode, int(time.time())
+            tf.addfile(entry, io.BytesIO(body))
+    return out.getvalue()

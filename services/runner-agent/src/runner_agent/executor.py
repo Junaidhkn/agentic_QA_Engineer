@@ -23,9 +23,10 @@ from runner_agent.config import Config
 from runner_agent.drivers.base import CommandSpec, Driver, Egress, Handle, Limits
 from runner_agent.k6stream import K6Aggregator
 from runner_agent.keys import RunnerKeys
-from runner_agent.sandbox_env.base import Sandbox, SandboxError, extract_source
+from runner_agent.sandbox_env.base import Sandbox, SandboxError, allowed_command, extract_source
 from runner_agent.sandbox_env.docker import DockerSandbox
 from runner_agent.sandbox_env.process import ProcessSandbox
+from runner_agent.scan import scan_tree
 
 log = logging.getLogger(__name__)
 CONTENT_TYPES = {".json": "application/json", ".gz": "application/gzip", ".log": "text/plain"}
@@ -45,6 +46,7 @@ class JobState:
     exit_codes: dict[str, int] = field(default_factory=dict)
     vu_minutes: int = 0
     result: dict[str, Any] = field(default_factory=dict)
+    sandbox: Sandbox | None = None
 
 
 def _safe_extract(data: bytes, dest: Path) -> None:
@@ -93,6 +95,7 @@ class JobRunner:
                 env["BASE_URL"] = await sandbox.start()
                 log.info("sandbox healthy at %s", env["BASE_URL"], extra={"lease_id": lease_id})
                 sampler = asyncio.create_task(self._sample(sandbox))
+                state.sandbox = sandbox
             state.phase = "running"
             job_type = lease["job_type"]
             work = self._dispatch(job_type, lease, workdir, env, secrets, limits, state)
@@ -201,6 +204,8 @@ class JobRunner:
             return self._run_validation(lease, workdir, env, secrets, limits, state)
         if job_type == "sandbox_build":
             return self._run_sandbox_build()
+        if job_type == "repair_check":
+            return self._run_checks(lease, state)
         raise ValueError(f"unsupported job type {job_type}")
 
     # ------------------------------------------------------------ helpers ----
@@ -456,6 +461,38 @@ class JobRunner:
                 outcomes.append({"exit_code": code, "log_tail": log_tail if code else None})
             results[case["id"]] = outcomes
         state.result = {"validation": results}
+
+    # ------------------------------------------------------- repair checks ----
+    async def _run_checks(self, lease: dict[str, Any], state: JobState) -> None:
+        """Allowlisted commands (tests, build, lint) in the sandboxed app, each repeated as asked,
+        then the installed security scanners over the source tree (verification gates)."""
+        if state.sandbox is None:
+            raise SandboxError("checks", "repair checks need a sandbox")
+        results: list[dict[str, Any]] = []
+        for check in lease.get("checks") or []:
+            argv = [str(a) for a in check.get("argv") or []]
+            if not allowed_command(argv):
+                results.append({"id": check.get("id"), "attempt": 0, "refused": True, "exit_code": None})
+                continue
+            for attempt in range(max(1, min(int(check.get("repeat", 1)), 5))):
+                if state.cancelled.is_set() or state.abort_reason:
+                    break
+                state.progress = {"check": check.get("id"), "attempt": attempt + 1}
+                res = await state.sandbox.exec(argv, float(check.get("timeout_s", 600)))
+                results.append(
+                    {
+                        "id": check.get("id"),
+                        "attempt": attempt + 1,
+                        "exit_code": res.exit_code,
+                        "seconds": res.seconds,
+                        "timed_out": res.timed_out,
+                        "output": res.output,
+                    }
+                )
+        state.result["checks"] = results
+        if lease.get("scan"):
+            state.progress = {"check": "security_scan"}
+            state.result["scan"] = await scan_tree(state.sandbox.source_dir, self.config.semgrep_config)
 
 
 class _Tail:

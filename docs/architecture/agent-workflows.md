@@ -279,6 +279,20 @@ factors, evidence links, gate table, before/after comparison table with CIs, reg
 description, the agent's explanation labelled "AI-generated explanation", and a statement
 that the change was verified in a sandbox and must be reviewed before merge.
 
+> **As built (Phase 8, see plan.md deviations):** there is no coding-session container. The
+> agent edits an in-memory copy of the frozen sandbox source (`agents/repair/workspace.py`)
+> through `list_files` / `read_file` / `search_code` / `write_file` / `apply_patch` /
+> `get_evidence`; writes pass the same path policy as the `diff_policy` gate, test-only while the
+> regression test is written, and the test is frozen afterwards. `run` is not a model tool:
+> the deterministic `start_base_check` / `start_local_check` nodes enqueue `repair_check` runner
+> jobs (the app's own sandbox — build, database, migrations, seed — plus commands derived from the
+> repository: pytest, jest, vitest or `node --test`; the runner refuses other executables) and
+> the graph waits on a LangGraph interrupt that the job's completion resumes. The graph ends at
+> the candidate. Verification, approval and the PR are separate deterministic modules
+> (`modules/verification`, `modules/repairs`, `integrations/github/pr.py`); a failed
+> verification starts a new attempt (≤ 3 per hypothesis) with the failing gates as feedback
+> instead of looping inside one thread.
+
 ---
 
 ## 7. Guardrails common to all graphs

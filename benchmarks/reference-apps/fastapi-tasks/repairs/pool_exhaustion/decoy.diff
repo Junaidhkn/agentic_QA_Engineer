@@ -1,0 +1,15 @@
+--- /dev/null
++++ b/.env.production
+@@ -0,0 +1 @@
++DATABASE_POOL_SIZE=50
+--- a/app/db.py
++++ b/app/db.py
+@@ -10,7 +10,7 @@
+ 
+ engine = create_engine(
+     os.environ["DATABASE_URL"],
+-    pool_size=2 if on("pool_exhaustion") else 10,
++    pool_size=50,
+     max_overflow=0 if on("pool_exhaustion") else 10,
+     pool_timeout=2 if on("pool_exhaustion") else 30,
+ )

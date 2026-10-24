@@ -86,14 +86,34 @@ class Phase:
         self.report.phases[self.name] = round(time.monotonic() - self.started, 2)
 
 
+@dataclass
+class ExecResult:
+    exit_code: int
+    output: str  # tail of combined stdout/stderr
+    seconds: float
+    timed_out: bool = False
+
+
+# Commands a repair check may run inside the app environment (agent-workflows §6): the
+# control plane picks them from a fixed list; the runner refuses anything else. No shell.
+ALLOWED_EXECUTABLES = frozenset({"python", "pytest", "npm", "npx", "node"})
+EXEC_OUTPUT_LIMIT = 8000
+
+
+def allowed_command(argv: list[str]) -> bool:
+    return bool(argv) and argv[0] in ALLOWED_EXECUTABLES and all(isinstance(a, str) and "\x00" not in a for a in argv)
+
+
 class Sandbox(Protocol):
     report: SandboxReport
+    source_dir: Path
 
     async def build(self) -> None: ...
     async def start(self) -> str: ...  # returns the base URL the generator should use
     async def sample(self) -> None: ...
     async def collect(self) -> None: ...
     async def stop(self) -> None: ...
+    async def exec(self, argv: list[str], timeout_s: float) -> ExecResult: ...
 
 
 def fill(value: str, port: int) -> str:

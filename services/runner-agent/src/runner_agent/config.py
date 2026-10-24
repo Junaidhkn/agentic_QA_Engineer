@@ -34,6 +34,7 @@ class Config(BaseSettings):
         "test_validation",
         "sandbox_build",
         "sandbox_env",
+        "repair_check",
     ]
     # Sandboxes (ADR-0011)
     sandbox_postgres_url: str | None = None  # process sandbox: admin DSN for ephemeral databases (local/test)
@@ -49,6 +50,7 @@ class Config(BaseSettings):
     sandbox_postgres_image: str = "postgres:16.6"
     sandbox_redis_image: str = "redis:7.4.1"
     curl_image: str = "curlimages/curl:8.11.1"
+    semgrep_config: str = "p/default"  # security gate; point at a mirrored rules file when offline
     http_timeout_s: float = 30.0
     max_raw_upload_bytes: int = 64 * 1024 * 1024
 

@@ -1,0 +1,11 @@
+--- a/app/orders.py
++++ b/app/orders.py
+@@ -35,7 +35,7 @@
+         if rows[0]["stock"] < body.quantity:
+             raise HTTPException(409, "out of stock")
+         time.sleep(0.01)
+-        db.execute("UPDATE products SET stock = stock - ? WHERE id = ?", body.quantity, body.product_id)
++        db.execute("UPDATE products SET stock = MAX(stock - ?, 0) WHERE id = ?", body.quantity, body.product_id)
+     else:
+         with db.cursor() as c:
+             row = c.execute("SELECT stock FROM products WHERE id = ?", (body.product_id,)).fetchone()

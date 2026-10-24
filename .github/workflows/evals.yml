@@ -11,6 +11,10 @@ on:
       - "services/control-plane/src/reliability/modules/testsuites/**"
       - "services/control-plane/src/reliability/modules/workflows/**"
       - "services/control-plane/src/reliability/modules/diagnosis/**"
+      - "services/control-plane/src/reliability/modules/repairs/**"
+      - "services/control-plane/src/reliability/modules/verification/**"
+      - "services/control-plane/tests/support/repairs.py"
+      - "services/runner-agent/**"
       - "services/control-plane/tests/benchmark/**"
       - "services/control-plane/tests/support/defects.py"
       - "benchmarks/**"
@@ -116,3 +120,46 @@ jobs:
       - name: Summary
         if: always()
         run: cat ../../benchmarks/out/diagnosis.md >> "$GITHUB_STEP_SUMMARY" || true
+
+  # Repair benchmark (Phase 8 gate): oracle repairs must be verified (≥ 90%), decoy patches must
+  # never be (< 5% false-verified). With the model secret, the agent's own verified rate (≥ 40%).
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    services:
+      postgres:
+        image: postgres:16.6
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-retries 20
+      redis:
+        image: redis:7.4.1
+        ports: ["6379:6379"]
+    defaults:
+      run:
+        working-directory: services/control-plane
+    env:
+      RE_ENV: test
+      PGPASSWORD: postgres
+      RE_TEST_PG_SUPERUSER_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      RE_RUN_BENCHMARK: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with: { version: "0.5.11" }
+      - uses: grafana/setup-k6-action@v1
+        with: { k6-version: "0.54.0" }
+      - run: uv sync --frozen --extra dev
+      - name: Bootstrap database roles
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ../../scripts/db-bootstrap.sql
+      - name: Repair benchmark (oracle agent)
+        run: uv run pytest -s -q tests/benchmark/test_repair_benchmark.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: repair-benchmark
+          path: benchmarks/out/repair.*
+      - name: Summary
+        if: always()
+        run: cat ../../benchmarks/out/repair.md >> "$GITHUB_STEP_SUMMARY" || true

@@ -1,0 +1,13 @@
+--- a/app/products.py
++++ b/app/products.py
+@@ -27,7 +27,9 @@
+     if q:
+         if on("slow_search"):
+             rows = db.query("SELECT * FROM products")
+-            time.sleep(0.05)
++            end = time.perf_counter() + 0.05
++            while time.perf_counter() < end:
++                pass
+             return [_row(r) for r in rows if q.lower() in r["name"].lower()]
+         return [_row(r) for r in db.query("SELECT * FROM products WHERE name LIKE ?", f"%{q}%")]
+     return [_row(r) for r in db.query("SELECT * FROM products ORDER BY id")]

@@ -19,3 +19,9 @@ then point `RA_PLAYWRIGHT_DIR` here and `RA_K6_BINARY` at a local k6.
 - `otel-autoinstrument/` — zero-code OpenTelemetry layer (Python + Node) copied into sandbox app images.
 - `build/` — how sandbox images are built (BuildKit builder per job, package mirror only, layer cache per project).
 - The runner-agent image also serves as the sandbox **stub server** (`python -m runner_agent.sandbox_env.stub`).
+
+## Repair images (Phase 8)
+
+- `security-scan/` — runner-agent + semgrep, gitleaks, osv-scanner for the verification `security` gate.
+- `coding-tools/` — as-built notes: repair edits happen in an in-memory workspace; commands run
+  inside the app's own sandbox through `repair_check` jobs (allowlisted executables, no shell).

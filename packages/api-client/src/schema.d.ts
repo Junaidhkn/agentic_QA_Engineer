@@ -145,6 +145,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/findings/{finding_id}/repairs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Repairs */
+        get: operations["list_repairs_v1_findings__finding_id__repairs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/hypotheses/{hypothesis_id}/feedback": {
         parameters: {
             query?: never;
@@ -156,6 +173,23 @@ export interface paths {
         put?: never;
         /** Hypothesis Feedback */
         post: operations["hypothesis_feedback_v1_hypotheses__hypothesis_id__feedback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/hypotheses/{hypothesis_id}/repairs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Repair */
+        post: operations["start_repair_v1_hypotheses__hypothesis_id__repairs_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -585,6 +619,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/projects/{project_id}/noise-floor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Noise Floor */
+        get: operations["get_noise_floor_v1_projects__project_id__noise_floor_get"];
+        put?: never;
+        /**
+         * Measure Noise Floor
+         * @description Start an A/A measurement (6 sandbox load runs) from the latest passed sandbox load run.
+         */
+        post: operations["measure_noise_floor_v1_projects__project_id__noise_floor_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects/{project_id}/openapi-specs": {
         parameters: {
             query?: never;
@@ -814,6 +869,57 @@ export interface paths {
         put?: never;
         /** Bulk Review */
         post: operations["bulk_review_v1_projects__project_id__workflows_bulk_review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/repairs/{attempt_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Repair */
+        get: operations["get_repair_v1_repairs__attempt_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/repairs/{attempt_id}/patch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Patch */
+        get: operations["download_patch_v1_repairs__attempt_id__patch_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/repairs/{attempt_id}:cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Repair */
+        post: operations["cancel_repair_v1_repairs__attempt_id__cancel_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1223,6 +1329,23 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** ApprovalRef */
+        ApprovalRef: {
+            /** Decision */
+            decision: string | null;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Reason */
+            reason: string | null;
+        };
         /** ArchiveOut */
         ArchiveOut: {
             /**
@@ -1393,6 +1516,42 @@ export interface components {
             relation: string;
             /** Summary */
             summary: string;
+        };
+        /** ComparisonOut */
+        ComparisonOut: {
+            /** Baseline Run Ids */
+            baseline_run_ids: string[];
+            /** Baseline Value */
+            baseline_value: number;
+            /** Candidate Run Ids */
+            candidate_run_ids: string[];
+            /** Candidate Value */
+            candidate_value: number;
+            /** Ci High Pct */
+            ci_high_pct: number;
+            /** Ci Low Pct */
+            ci_low_pct: number;
+            /** Delta Pct */
+            delta_pct: number;
+            /** Method */
+            method: string;
+            /** Metric */
+            metric: string;
+            /** Noise Floor Pct */
+            noise_floor_pct: number;
+            /** Scope */
+            scope: string;
+            /** Verdict */
+            verdict: string;
+        };
+        /** ConstraintsIn */
+        ConstraintsIn: {
+            /** Allowed Paths */
+            allowed_paths?: string[] | null;
+            /** Max Changed Lines */
+            max_changed_lines?: number | null;
+            /** Max Files */
+            max_files?: number | null;
         };
         /** DecisionIn */
         DecisionIn: {
@@ -1617,6 +1776,25 @@ export interface components {
              * @enum {string}
              */
             status: "open" | "wont_fix" | "duplicate" | "resolved";
+        };
+        /** GateOut */
+        GateOut: {
+            /** Applicable */
+            applicable: boolean;
+            /** Finished At */
+            finished_at: string | null;
+            /** Gate */
+            gate: string;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Run Ids */
+            run_ids: string[];
+            /** Started At */
+            started_at: string | null;
+            /** Status */
+            status: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2046,6 +2224,131 @@ export interface components {
             /** Name */
             name?: string | null;
         };
+        /** PullRequestOut */
+        PullRequestOut: {
+            /** Branch */
+            branch: string;
+            /** Error */
+            error: string | null;
+            /** Number */
+            number: number | null;
+            /** State */
+            state: string;
+            /** Url */
+            url: string | null;
+        };
+        /** RepairDetail */
+        RepairDetail: {
+            /** Agent Summary */
+            agent_summary: string | null;
+            /**
+             * Agent Summary Label
+             * @default AI-generated explanation
+             */
+            agent_summary_label: string;
+            approval: components["schemas"]["ApprovalRef"] | null;
+            /** Attempt No */
+            attempt_no: number;
+            /** Base Commit Sha */
+            base_commit_sha: string;
+            /** Constraints */
+            constraints: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Diff */
+            diff: string | null;
+            /** Diff Stats */
+            diff_stats: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Finding Id
+             * Format: uuid
+             */
+            finding_id: string;
+            /**
+             * Hypothesis Id
+             * Format: uuid
+             */
+            hypothesis_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            pull_request: components["schemas"]["PullRequestOut"] | null;
+            /** Regression Test Paths */
+            regression_test_paths: string[] | null;
+            /** Status */
+            status: string;
+            /** Status Reason */
+            status_reason: string | null;
+            /** Token Usage */
+            token_usage: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            verification: components["schemas"]["VerificationOut"] | null;
+        };
+        /** RepairIn */
+        RepairIn: {
+            constraints?: components["schemas"]["ConstraintsIn"] | null;
+        };
+        /** RepairOut */
+        RepairOut: {
+            /** Attempt No */
+            attempt_no: number;
+            /** Base Commit Sha */
+            base_commit_sha: string;
+            /** Constraints */
+            constraints: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Diff Stats */
+            diff_stats: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Finding Id
+             * Format: uuid
+             */
+            finding_id: string;
+            /**
+             * Hypothesis Id
+             * Format: uuid
+             */
+            hypothesis_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Regression Test Paths */
+            regression_test_paths: string[] | null;
+            /** Status */
+            status: string;
+            /** Status Reason */
+            status_reason: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** RepoOut */
         RepoOut: {
             /** Default Branch */
@@ -2334,6 +2637,31 @@ export interface components {
             run_id: string;
             /** Status */
             status: string;
+        };
+        /** VerificationOut */
+        VerificationOut: {
+            /** Comparisons */
+            comparisons: components["schemas"]["ComparisonOut"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Finished At */
+            finished_at: string | null;
+            /** Gates */
+            gates: components["schemas"]["GateOut"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Status */
+            status: string;
+            /** Summary */
+            summary: {
+                [key: string]: unknown;
+            } | null;
         };
         /** WorkflowCreate */
         WorkflowCreate: {
@@ -2742,6 +3070,39 @@ export interface operations {
             };
         };
     };
+    list_repairs_v1_findings__finding_id__repairs_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                finding_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepairOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     hypothesis_feedback_v1_hypotheses__hypothesis_id__feedback_post: {
         parameters: {
             query?: never;
@@ -2768,6 +3129,44 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_repair_v1_hypotheses__hypothesis_id__repairs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "idempotency-key"?: string | null;
+                authorization?: string | null;
+            };
+            path: {
+                hypothesis_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepairIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepairOut"];
                 };
             };
             /** @description Validation Error */
@@ -4011,6 +4410,74 @@ export interface operations {
             };
         };
     };
+    get_noise_floor_v1_projects__project_id__noise_floor_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    measure_noise_floor_v1_projects__project_id__noise_floor_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_openapi_v1_projects__project_id__openapi_specs_get: {
         parameters: {
             query?: never;
@@ -4746,6 +5213,103 @@ export interface operations {
                     "application/json": {
                         [key: string]: number;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_repair_v1_repairs__attempt_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                attempt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepairDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_patch_v1_repairs__attempt_id__patch_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                attempt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_repair_v1_repairs__attempt_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                attempt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepairOut"];
                 };
             };
             /** @description Validation Error */

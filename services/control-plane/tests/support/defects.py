@@ -166,6 +166,7 @@ class Case:
     error_rate: float = 0.01
     finding_type: str | None = None
     endpoint: str | None = None
+    metric: str | None = None  # the breached metric the label describes (e.g. error_rate)
 
     @property
     def label(self) -> dict[str, Any]:
@@ -178,7 +179,14 @@ CASES = [
     Case("fastapi-tasks", "n_plus_one", ["tasks.project-list"], endpoint="GET /api/projects/{{ project_id }}/tasks"),
     Case("fastapi-tasks", "pool_exhaustion", ["tasks.create"], endpoint="POST /api/tasks"),
     Case("fastapi-shop", "race_stock", ["shop.buy-limited"], kind="probe", finding_type="invariant_violation"),
-    Case("fastapi-shop", "pay_errors", ["shop.pay"], duration_s=20, endpoint="POST /api/orders/{{ order_id }}/pay"),
+    Case(
+        "fastapi-shop",
+        "pay_errors",
+        ["shop.pay"],
+        duration_s=20,
+        endpoint="POST /api/orders/{{ order_id }}/pay",
+        metric="error_rate",
+    ),
     Case("fastapi-shop", "slow_search", ["shop.search"], p95_ms=45, endpoint="GET /api/products"),
 ]
 
@@ -209,13 +217,23 @@ class Outcome:
         }
 
 
+# Benchmark metadata never ships with the app: labels, the defect README and repair fixtures
+# would hand the agent the answers.
+NOT_SOURCE = {"labels.json", "README.md"}
+
+
 def archive(app: str) -> bytes:
     root = CORPUS / app
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tf:
         for p in root.rglob("*"):
-            if p.is_file() and not {"__pycache__", "node_modules", ".next"} & set(p.parts):
-                tf.add(p, arcname=f"{app}/{p.relative_to(root)}")
+            rel = p.relative_to(root)
+            if (
+                p.is_file()
+                and not {"__pycache__", "node_modules", ".next", "repairs"} & set(rel.parts)
+                and str(rel) not in NOT_SOURCE
+            ):
+                tf.add(p, arcname=f"{app}/{rel}")
     return buf.getvalue()
 
 
@@ -320,6 +338,7 @@ async def run_case(client: httpx.AsyncClient, base: str, tmp_path: Path, case: C
         for f in findings
         if (case.finding_type is None or f["type"] == case.finding_type)
         and (case.endpoint is None or f["headline"].get("scope") == f"endpoint:{case.endpoint}")
+        and (case.metric is None or f["headline"].get("metric") == case.metric)
     ]
     if not wanted:
         summaries = (await client.get(f"/v1/runs/{run.json()['id']}/summaries", headers=h)).json()

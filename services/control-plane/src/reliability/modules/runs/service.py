@@ -129,6 +129,7 @@ async def _config(session: AsyncSession, kind: str, suite_id: uuid.UUID, profile
                 "duration_s": profile.duration_s,
                 "thresholds": profile.thresholds,
                 "stages": profile.stages,
+                "workload_mix": mix,
                 "load_profile_id": str(profile.id),
             },
             "max_wall_s": _wall_clock(profile),
@@ -475,3 +476,30 @@ async def raw_count_active(session: AsyncSession) -> int:
         )
         or 0
     )
+
+
+async def latest_sandbox_load_runs(since: datetime) -> list[tuple[uuid.UUID, uuid.UUID]]:
+    """Cross-tenant sweep helper: (org_id, run_id) of each project's latest passed, ordinary
+    sandbox load run since ``since`` (system runs — experiments, verification, A/A — excluded)."""
+    async with system_tx() as session:
+        rows = (
+            await session.execute(
+                select(Run)
+                .where(
+                    Run.environment_kind == "sandbox_build",
+                    Run.kind == "load",
+                    Run.status == "passed",
+                    Run.created_at > since,
+                )
+                .order_by(Run.created_at.desc())
+            )
+        ).scalars()
+        seen: set[uuid.UUID] = set()
+        out = []
+        for r in rows:
+            cfg = r.config_snapshot or {}
+            if r.project_id in seen or any(cfg.get(k) for k in ("verification", "noise_floor", "experiment")):
+                continue
+            seen.add(r.project_id)
+            out.append((r.org_id, r.id))
+        return out

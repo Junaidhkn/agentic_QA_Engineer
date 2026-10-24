@@ -34,6 +34,10 @@ export type SandboxBuild = S["BuildOut"];
 export type Diagnosis = S["DiagnosisOut"];
 export type Hypothesis = S["HypothesisOut"];
 export type Citation = S["CitationOut"];
+export type Repair = S["RepairOut"];
+export type RepairDetail = S["RepairDetail"];
+export type Gate = S["GateOut"];
+export type Comparison = S["ComparisonOut"];
 export interface CoverageCounts { discovered?: number; approved?: number; tested?: number; passing?: number }
 export interface Coverage {
   totals: Required<CoverageCounts>;

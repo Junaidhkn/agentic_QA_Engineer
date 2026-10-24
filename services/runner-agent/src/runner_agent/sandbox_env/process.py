@@ -29,7 +29,9 @@ from runner_agent.config import Config
 from runner_agent.sandbox_env.base import (
     CONNECTIONS_SQL,
     DB_STATS_SQL,
+    EXEC_OUTPUT_LIMIT,
     STATEMENTS_SQL,
+    ExecResult,
     Phase,
     SandboxError,
     SandboxReport,
@@ -91,6 +93,7 @@ class ProcessSandbox:
         self.app_dir = (src / plan.get("root", "")).resolve()
         if src.resolve() not in [self.app_dir, *self.app_dir.parents]:
             raise SandboxError("plan", "app root escapes the source tree")
+        self.source_dir = self.app_dir
         self.app_env, self.otlp, self.log_path, self.run_id = app_env, otlp or {}, log_path, run_id
         self.report = SandboxReport(
             strategy=plan.get("strategy", "template"),
@@ -152,7 +155,7 @@ class ProcessSandbox:
 
     def _argv(self, cmd: list[str]) -> list[str]:
         argv = [fill(a, self.port) for a in cmd]
-        if self.venv is not None and argv and argv[0] in ("python", "pip", "alembic", "uvicorn", "gunicorn"):
+        if self.venv is not None and argv and argv[0] in ("python", "pip", "pytest", "alembic", "uvicorn", "gunicorn"):
             exe = self.venv / "bin" / argv[0]
             if exe.exists():
                 argv[0] = str(exe)
@@ -352,6 +355,37 @@ class ProcessSandbox:
                     pass
                 await asyncio.sleep(0.5)
         raise SandboxError("health", f"no healthy response from {url} within {HEALTH_TIMEOUT_S}s")
+
+    # -------------------------------------------------------------- exec ----
+    async def exec(self, argv: list[str], timeout_s: float) -> ExecResult:
+        """Run an allowlisted command in the app directory with the app's environment."""
+        cmd = self._argv(argv)
+        self._write(f"\n$ {' '.join(cmd)}\n")
+        started = time.monotonic()
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            cwd=self.app_dir,
+            env={**self._app_env(), "BASE_URL": self.report.base_url or ""},
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            start_new_session=True,
+        )
+        timed_out = False
+        try:
+            out, _ = await asyncio.wait_for(proc.communicate(), timeout_s)
+        except TimeoutError:
+            timed_out = True
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(proc.pid, signal.SIGKILL)
+            out, _ = await proc.communicate()
+        text = out.decode(errors="replace")
+        self._write(text[-200_000:])
+        return ExecResult(
+            proc.returncode if proc.returncode is not None and not timed_out else 124,
+            text[-EXEC_OUTPUT_LIMIT:],
+            round(time.monotonic() - started, 2),
+            timed_out,
+        )
 
     # ----------------------------------------------------------- evidence ----
     async def _query(self, sql: str) -> Any:

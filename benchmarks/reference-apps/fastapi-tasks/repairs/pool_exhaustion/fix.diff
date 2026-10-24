@@ -1,0 +1,17 @@
+--- a/app/routes.py
++++ b/app/routes.py
+@@ -55,10 +55,11 @@
+     task = Task(project_id=body.project_id, title=body.title, assignee_email=body.assignee_email)
+     db.add(task)
+     db.flush()
++    result = _task(task)
++    db.commit()  # release the connection before the slow notification call
+     if on("pool_exhaustion"):
+-        time.sleep(0.3)  # Defect: slow notification call while the transaction holds a connection
+-    db.commit()
+-    return _task(task)
++        time.sleep(0.3)  # slow notification call, made after the transaction has ended
++    return result
+ 
+ 
+ @router.get("/tasks/{task_id}")

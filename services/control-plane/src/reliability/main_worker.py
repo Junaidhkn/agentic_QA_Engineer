@@ -46,6 +46,11 @@ celery_app.conf.update(
             "schedule": crontab(minute=7),
         },
         "runners-reap": {"task": "reliability.run_job", "args": ["runners.reap", {}], "schedule": 10.0},
+        "noise-floor": {
+            "task": "reliability.run_job",
+            "args": ["verification.noise_floor_sweep", {}],
+            "schedule": crontab(minute=23, hour=3, day_of_week=0),
+        },
         "partitions": {
             "task": "reliability.run_job",
             "args": ["maintenance.partitions", {}],

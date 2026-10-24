@@ -1,0 +1,30 @@
+--- a/app/orders.py
++++ b/app/orders.py
+@@ -76,13 +76,25 @@
+     return _order(order_id, user)
+ 
+ 
++def _charge(order_id: int) -> None:
++    """Payment adapter call (simulated gateway; times out transiently under the defect toggle)."""
++    if on("pay_errors") and random.random() < 0.05:
++        raise RuntimeError("payment gateway timeout")
++
++
+ @router.post("/{order_id}/pay")
+ def pay_order(order_id: int, user: int = CurrentUser) -> dict[str, object]:
+     order = _order(order_id, user)
+     if order["status"] != "pending":
+         raise HTTPException(409, "order is not pending")
+-    if on("pay_errors") and random.random() < 0.05:
+-        raise RuntimeError("payment gateway timeout")  # Defect: unhandled adapter error → 500
++    for attempt in range(3):  # retry transient gateway timeouts with a short backoff
++        try:
++            _charge(order_id)
++            break
++        except RuntimeError:
++            if attempt == 2:
++                raise HTTPException(502, "payment gateway unavailable") from None
++            time.sleep(0.01 * (attempt + 1))
+     db.execute("UPDATE orders SET status = 'paid' WHERE id = ?", order_id)
+     return {**order, "status": "paid"}
+ 

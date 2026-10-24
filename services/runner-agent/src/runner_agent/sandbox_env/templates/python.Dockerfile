@@ -8,6 +8,8 @@ ENV PYTHONUNBUFFERED=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /app
 COPY . .
 {{INSTALL}}
+# Repair checks run the regression test with pytest inside this image (agent-workflows §6).
+RUN python -c "import pytest" 2>/dev/null || pip install --no-cache-dir "pytest>=8,<9"
 {{BUILD}}
 COPY --from=otel /otel/python /otel/python
 # Zero-code instrumentation without changing the start command (same mechanism as the OTel operator).

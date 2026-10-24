@@ -319,6 +319,50 @@
         "title": "ApprovalOut",
         "type": "object"
       },
+      "ApprovalRef": {
+        "properties": {
+          "decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "id",
+          "decision",
+          "reason",
+          "expires_at"
+        ],
+        "title": "ApprovalRef",
+        "type": "object"
+      },
       "ArchiveOut": {
         "properties": {
           "archive_artifact_id": {
@@ -754,6 +798,128 @@
           "check"
         ],
         "title": "CitationOut",
+        "type": "object"
+      },
+      "ComparisonOut": {
+        "properties": {
+          "baseline_run_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Baseline Run Ids",
+            "type": "array"
+          },
+          "baseline_value": {
+            "title": "Baseline Value",
+            "type": "number"
+          },
+          "candidate_run_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Candidate Run Ids",
+            "type": "array"
+          },
+          "candidate_value": {
+            "title": "Candidate Value",
+            "type": "number"
+          },
+          "ci_high_pct": {
+            "title": "Ci High Pct",
+            "type": "number"
+          },
+          "ci_low_pct": {
+            "title": "Ci Low Pct",
+            "type": "number"
+          },
+          "delta_pct": {
+            "title": "Delta Pct",
+            "type": "number"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "noise_floor_pct": {
+            "title": "Noise Floor Pct",
+            "type": "number"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "verdict": {
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "metric",
+          "baseline_value",
+          "candidate_value",
+          "delta_pct",
+          "ci_low_pct",
+          "ci_high_pct",
+          "noise_floor_pct",
+          "verdict",
+          "method",
+          "baseline_run_ids",
+          "candidate_run_ids"
+        ],
+        "title": "ComparisonOut",
+        "type": "object"
+      },
+      "ConstraintsIn": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed_paths": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Paths"
+          },
+          "max_changed_lines": {
+            "anyOf": [
+              {
+                "maximum": 300.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Changed Lines"
+          },
+          "max_files": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Files"
+          }
+        },
+        "title": "ConstraintsIn",
         "type": "object"
       },
       "DecisionIn": {
@@ -1331,6 +1497,76 @@
           "status"
         ],
         "title": "FindingPatch",
+        "type": "object"
+      },
+      "GateOut": {
+        "properties": {
+          "applicable": {
+            "title": "Applicable",
+            "type": "boolean"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "gate": {
+            "title": "Gate",
+            "type": "string"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "run_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Run Ids",
+            "type": "array"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "gate",
+          "status",
+          "applicable",
+          "run_ids",
+          "result",
+          "started_at",
+          "finished_at"
+        ],
+        "title": "GateOut",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -2471,6 +2707,350 @@
         "title": "ProjectPatch",
         "type": "object"
       },
+      "PullRequestOut": {
+        "properties": {
+          "branch": {
+            "title": "Branch",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Number"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "state",
+          "url",
+          "number",
+          "branch",
+          "error"
+        ],
+        "title": "PullRequestOut",
+        "type": "object"
+      },
+      "RepairDetail": {
+        "properties": {
+          "agent_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Summary"
+          },
+          "agent_summary_label": {
+            "default": "AI-generated explanation",
+            "title": "Agent Summary Label",
+            "type": "string"
+          },
+          "approval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApprovalRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "attempt_no": {
+            "title": "Attempt No",
+            "type": "integer"
+          },
+          "base_commit_sha": {
+            "title": "Base Commit Sha",
+            "type": "string"
+          },
+          "constraints": {
+            "additionalProperties": true,
+            "title": "Constraints",
+            "type": "object"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "diff": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diff"
+          },
+          "diff_stats": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diff Stats"
+          },
+          "finding_id": {
+            "format": "uuid",
+            "title": "Finding Id",
+            "type": "string"
+          },
+          "hypothesis_id": {
+            "format": "uuid",
+            "title": "Hypothesis Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "pull_request": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PullRequestOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "regression_test_paths": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regression Test Paths"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "token_usage": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Usage"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "verification": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VerificationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "finding_id",
+          "hypothesis_id",
+          "attempt_no",
+          "status",
+          "status_reason",
+          "base_commit_sha",
+          "constraints",
+          "diff_stats",
+          "regression_test_paths",
+          "created_at",
+          "updated_at",
+          "agent_summary",
+          "diff",
+          "verification",
+          "approval",
+          "pull_request",
+          "token_usage"
+        ],
+        "title": "RepairDetail",
+        "type": "object"
+      },
+      "RepairIn": {
+        "additionalProperties": false,
+        "properties": {
+          "constraints": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConstraintsIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "RepairIn",
+        "type": "object"
+      },
+      "RepairOut": {
+        "properties": {
+          "attempt_no": {
+            "title": "Attempt No",
+            "type": "integer"
+          },
+          "base_commit_sha": {
+            "title": "Base Commit Sha",
+            "type": "string"
+          },
+          "constraints": {
+            "additionalProperties": true,
+            "title": "Constraints",
+            "type": "object"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "diff_stats": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diff Stats"
+          },
+          "finding_id": {
+            "format": "uuid",
+            "title": "Finding Id",
+            "type": "string"
+          },
+          "hypothesis_id": {
+            "format": "uuid",
+            "title": "Hypothesis Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "regression_test_paths": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regression Test Paths"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "finding_id",
+          "hypothesis_id",
+          "attempt_no",
+          "status",
+          "status_reason",
+          "base_commit_sha",
+          "constraints",
+          "diff_stats",
+          "regression_test_paths",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RepairOut",
+        "type": "object"
+      },
       "RepoOut": {
         "properties": {
           "default_branch": {
@@ -3336,6 +3916,73 @@
         "title": "VerdictOut",
         "type": "object"
       },
+      "VerificationOut": {
+        "properties": {
+          "comparisons": {
+            "items": {
+              "$ref": "#/components/schemas/ComparisonOut"
+            },
+            "title": "Comparisons",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "gates": {
+            "items": {
+              "$ref": "#/components/schemas/GateOut"
+            },
+            "title": "Gates",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "summary",
+          "gates",
+          "comparisons",
+          "created_at",
+          "finished_at"
+        ],
+        "title": "VerificationOut",
+        "type": "object"
+      },
       "WorkflowCreate": {
         "additionalProperties": false,
         "properties": {
@@ -4145,6 +4792,69 @@
         ]
       }
     },
+    "/v1/findings/{finding_id}/repairs": {
+      "get": {
+        "operationId": "list_repairs_v1_findings__finding_id__repairs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "finding_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Finding Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RepairOut"
+                  },
+                  "title": "Response List Repairs V1 Findings  Finding Id  Repairs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Repairs",
+        "tags": [
+          "repairs"
+        ]
+      }
+    },
     "/v1/hypotheses/{hypothesis_id}/feedback": {
       "post": {
         "operationId": "hypothesis_feedback_v1_hypotheses__hypothesis_id__feedback_post",
@@ -4213,6 +4923,91 @@
         "summary": "Hypothesis Feedback",
         "tags": [
           "diagnosis"
+        ]
+      }
+    },
+    "/v1/hypotheses/{hypothesis_id}/repairs": {
+      "post": {
+        "operationId": "start_repair_v1_hypotheses__hypothesis_id__repairs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hypothesis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Hypothesis Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepairIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepairOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Repair",
+        "tags": [
+          "repairs"
         ]
       }
     },
@@ -6549,6 +7344,125 @@
         ]
       }
     },
+    "/v1/projects/{project_id}/noise-floor": {
+      "get": {
+        "operationId": "get_noise_floor_v1_projects__project_id__noise_floor_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Noise Floor V1 Projects  Project Id  Noise Floor Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Noise Floor",
+        "tags": [
+          "verification"
+        ]
+      },
+      "post": {
+        "description": "Start an A/A measurement (6 sandbox load runs) from the latest passed sandbox load run.",
+        "operationId": "measure_noise_floor_v1_projects__project_id__noise_floor_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Measure Noise Floor V1 Projects  Project Id  Noise Floor Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Measure Noise Floor",
+        "tags": [
+          "verification"
+        ]
+      }
+    },
     "/v1/projects/{project_id}/openapi-specs": {
       "get": {
         "operationId": "list_openapi_v1_projects__project_id__openapi_specs_get",
@@ -8081,6 +8995,176 @@
         "summary": "Bulk Review",
         "tags": [
           "workflows"
+        ]
+      }
+    },
+    "/v1/repairs/{attempt_id}": {
+      "get": {
+        "operationId": "get_repair_v1_repairs__attempt_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attempt_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Attempt Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepairDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Repair",
+        "tags": [
+          "repairs"
+        ]
+      }
+    },
+    "/v1/repairs/{attempt_id}/patch": {
+      "get": {
+        "operationId": "download_patch_v1_repairs__attempt_id__patch_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attempt_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Attempt Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download Patch",
+        "tags": [
+          "repairs"
+        ]
+      }
+    },
+    "/v1/repairs/{attempt_id}:cancel": {
+      "post": {
+        "operationId": "cancel_repair_v1_repairs__attempt_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attempt_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Attempt Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepairOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Repair",
+        "tags": [
+          "repairs"
         ]
       }
     },

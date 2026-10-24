@@ -330,3 +330,44 @@ def test_plan_root_cannot_escape(tmp_path: Path) -> None:
 def test_json_report_roundtrip(tmp_path: Path) -> None:
     sbx = ProcessSandbox(Config(env="test"), "j", tmp_path, {"root": ""}, {}, None, tmp_path / "s.log")
     assert json.loads(json.dumps(sbx.report.to_dict()))["driver"] == "process"
+
+
+# ------------------------------------------------------------- repair checks ----
+def test_only_allowlisted_commands_run() -> None:
+    from runner_agent.sandbox_env.base import allowed_command
+
+    assert allowed_command(["python", "-m", "pytest", "-q", "tests/test_x.py"])
+    assert allowed_command(["npm", "test", "--silent"])
+    for argv in ([], ["bash", "-c", "curl evil"], ["sh", "x"], ["/usr/bin/python", "x"], ["git", "push"]):
+        assert not allowed_command(argv)
+
+
+async def test_process_sandbox_exec_runs_in_app_env(tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    (src / "tests").mkdir(parents=True)
+    (src / "tests" / "check.py").write_text("import os, sys\nprint('token', os.environ['API_TOKEN'])\nsys.exit(3)\n")
+    sbx = ProcessSandbox(Config(env="test"), "job-exec1", src, {"env": {}}, {"API_TOKEN": "t0k"}, None, tmp_path / "l")
+    res = await sbx.exec(["python", "tests/check.py"], 30)
+    assert res.exit_code == 3 and "token t0k" in res.output and not res.timed_out
+    slow = await sbx.exec(["python", "-c", "import time; time.sleep(5)"], 0.5)
+    assert slow.timed_out and slow.exit_code == 124
+
+
+async def test_scan_tree_normalises_installed_scanners(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from runner_agent.scan import scan_tree
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    semgrep = {"results": [{"check_id": "python.sqli", "path": "app/db.py", "extra": {"severity": "ERROR"}}]}
+    gitleaks = [{"RuleID": "aws-access-key", "File": "app/settings.py"}]
+    for name, out in (("semgrep", semgrep), ("gitleaks", gitleaks)):
+        exe = bin_dir / name
+        exe.write_text(f"#!{sys.executable}\nimport json\nprint(json.dumps({out!r}))\n")
+        exe.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}/usr/bin:/bin")
+    report = await scan_tree(tmp_path)
+    assert report["tools"] == ["semgrep", "gitleaks"] and report["missing"] == ["osv-scanner"]
+    assert {(f["tool"], f["rule"], f["severity"]) for f in report["findings"]} == {
+        ("semgrep", "python.sqli", "high"),
+        ("gitleaks", "aws-access-key", "high"),
+    }

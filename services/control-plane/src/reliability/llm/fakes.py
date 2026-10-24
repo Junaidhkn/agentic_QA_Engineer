@@ -54,4 +54,9 @@ def default_fake_client() -> FakeClient:
     client.register("diagnosis.triage", lambda r: {"categories": [], "focus_evidence": []})
     client.register("diagnosis.investigate", lambda r: "fake model: no further investigation")
     client.register("diagnosis.hypothesize", lambda r: {"hypotheses": [], "next_steps": []})
+    client.register(
+        "repair.plan",
+        lambda r: {"files": [], "approach": "fake model: no repair proposed", "test_idea": "", "explanation": ""},
+    )
+    client.register("repair.code", lambda r: "fake model: no changes")
     return client

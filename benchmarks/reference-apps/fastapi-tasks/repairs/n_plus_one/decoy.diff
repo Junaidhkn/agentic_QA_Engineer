@@ -1,0 +1,23 @@
+--- a/app/routes.py
++++ b/app/routes.py
+@@ -4,7 +4,7 @@
+ 
+ from fastapi import APIRouter, Depends, HTTPException
+ from pydantic import BaseModel, Field
+-from sqlalchemy import func, select
++from sqlalchemy import func, select, text
+ from sqlalchemy.orm import Session
+ 
+ from app.db import Comment, Project, Task, session
+@@ -37,7 +37,10 @@
+ def project_tasks(project_id: int, db: Session = Depends(session)) -> list[dict[str, object]]:
+     tasks = list(db.scalars(select(Task).where(Task.project_id == project_id).order_by(Task.id).limit(200)))
+     if on("n_plus_one"):
+-        return [{**_task(t), "comments": db.scalar(select(func.count()).where(Comment.task_id == t.id))} for t in tasks]
++        ids = ",".join(str(t.id) for t in tasks) or "0"
++        rows = db.execute(text(f"SELECT task_id, count(*) FROM comments WHERE task_id IN ({ids}) GROUP BY task_id"))
++        counts = dict(rows.all())
++        return [{**_task(t), "comments": counts.get(t.id, 0)} for t in tasks]
+     counts = dict(db.execute(select(Comment.task_id, func.count()).where(Comment.task_id.in_([t.id for t in tasks]))
+                              .group_by(Comment.task_id)).all())
+     return [{**_task(t), "comments": counts.get(t.id, 0)} for t in tasks]

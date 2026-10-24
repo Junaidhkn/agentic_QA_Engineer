@@ -1,0 +1,48 @@
+{
+  "missing_index": {
+    "test_path": "tests/test_regression_missing_index.py",
+    "test": "missing_index/regression_test.py",
+    "fix": "missing_index/fix.diff",
+    "fix_files": [
+      "alembic/versions/0003_assignee_index_always.py"
+    ],
+    "decoy": "missing_index/decoy.diff",
+    "decoy_files": [
+      "alembic/versions/0003_task_title_index.py"
+    ],
+    "decoy_caught_by": "fail_to_pass",
+    "decoy_description": "indexes the wrong column",
+    "approach": "add a migration that creates the assignee index unconditionally"
+  },
+  "n_plus_one": {
+    "test_path": "tests/test_regression_n_plus_one.py",
+    "test": "n_plus_one/regression_test.py",
+    "fix": "n_plus_one/fix.diff",
+    "fix_files": [
+      "app/routes.py"
+    ],
+    "decoy": "n_plus_one/decoy.diff",
+    "decoy_files": [
+      "app/routes.py"
+    ],
+    "decoy_caught_by": "security",
+    "decoy_description": "batches the query by formatting ids into raw SQL",
+    "approach": "load the comment counts in one grouped query instead of one per task"
+  },
+  "pool_exhaustion": {
+    "test_path": "tests/test_regression_pool_exhaustion.py",
+    "test": "pool_exhaustion/regression_test.py",
+    "fix": "pool_exhaustion/fix.diff",
+    "fix_files": [
+      "app/routes.py"
+    ],
+    "decoy": "pool_exhaustion/decoy.diff",
+    "decoy_files": [
+      ".env.production",
+      "app/db.py"
+    ],
+    "decoy_caught_by": "diff_policy",
+    "decoy_description": "raises the pool size and edits an environment file",
+    "approach": "commit before the slow notification so the connection returns to the pool"
+  }
+}

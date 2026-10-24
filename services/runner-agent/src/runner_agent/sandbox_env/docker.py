@@ -25,7 +25,9 @@ from runner_agent.sandbox_env import compose as compose_mod
 from runner_agent.sandbox_env.base import (
     CONNECTIONS_SQL,
     DB_STATS_SQL,
+    EXEC_OUTPUT_LIMIT,
     STATEMENTS_SQL,
+    ExecResult,
     Phase,
     SandboxError,
     SandboxReport,
@@ -128,6 +130,7 @@ class DockerSandbox:
         self.app_dir = (self.src / plan.get("root", "")).resolve()
         if self.src not in [self.app_dir, *self.app_dir.parents]:
             raise SandboxError("plan", "app root escapes the source tree")
+        self.source_dir = self.app_dir
         self.app_env, self.otlp, self.log_path = app_env, otlp or {}, log_path
         self.project_id, self.run_id = project_id, run_id
         self.report = SandboxReport(
@@ -170,6 +173,35 @@ class DockerSandbox:
         if check and proc.returncode:
             raise SandboxError(phase, f"docker {' '.join(args[:2])} exited {proc.returncode}: {text[-600:]}")
         return text
+
+    async def exec(self, argv: list[str], timeout_s: float) -> ExecResult:
+        """Run an allowlisted command inside the running app container (same env and network)."""
+        args = compose_args(self.job_id, self.compose_file, "exec", "-T", self._app(), *argv)
+        self._log.write(f"\n$ docker {' '.join(args)}\n".encode())
+        started = time.monotonic()
+        proc = await asyncio.create_subprocess_exec(
+            self.config.docker_binary,
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            env={
+                "PATH": "/usr/local/bin:/usr/bin:/bin",
+                "HOME": os.environ.get("HOME", "/tmp"),
+                RE_PG: self.pg_password,
+            },
+            cwd=self.src,
+        )
+        timed_out = False
+        try:
+            out, _ = await asyncio.wait_for(proc.communicate(), timeout_s)
+        except TimeoutError:
+            timed_out = True
+            proc.kill()
+            out, _ = await proc.communicate()
+        text = out.decode(errors="replace")
+        self._log.write(text[-200_000:].encode())
+        code = proc.returncode if proc.returncode is not None and not timed_out else 124
+        return ExecResult(code, text[-EXEC_OUTPUT_LIMIT:], round(time.monotonic() - started, 2), timed_out)
 
     def _images(self) -> dict[str, str]:
         return {
