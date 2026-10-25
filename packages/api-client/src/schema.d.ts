@@ -247,6 +247,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/legal/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documents
+         * @description Public: current versions of the Terms, AUP, DPA and sub-processor list.
+         */
+        get: operations["documents_v1_legal_documents_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/legal/documents/{document}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Document Text */
+        get: operations["document_text_v1_legal_documents__document__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/load-profile-templates": {
         parameters: {
             query?: never;
@@ -425,6 +462,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/orgs/{org_id}/legal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Legal Status */
+        get: operations["legal_status_v1_orgs__org_id__legal_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/orgs/{org_id}/legal-acceptances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept
+         * @description Owner/admin accepts a document version for the organization (recorded with IP and user agent).
+         */
+        post: operations["accept_v1_orgs__org_id__legal_acceptances_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/orgs/{org_id}/members": {
         parameters: {
             query?: never;
@@ -469,6 +543,26 @@ export interface paths {
         };
         /** Usage */
         get: operations["usage_v1_orgs__org_id__usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Plans
+         * @description Public: plans and their limits (pricing page). ``price_usd_month`` null = contact sales.
+         */
+        get: operations["plans_v1_plans_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1269,6 +1363,33 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AcceptIn */
+        AcceptIn: {
+            /**
+             * Document
+             * @enum {string}
+             */
+            document: "terms" | "aup" | "dpa";
+            /** Version */
+            version: string;
+        };
+        /** AcceptanceOut */
+        AcceptanceOut: {
+            /**
+             * Accepted At
+             * Format: date-time
+             */
+            accepted_at: string;
+            /** Document */
+            document: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Version */
+            version: string;
+        };
         /** ApiKeyCreate */
         ApiKeyCreate: {
             /**
@@ -1708,6 +1829,34 @@ export interface components {
             /** Status */
             status: string;
         };
+        /** DocumentOut */
+        DocumentOut: {
+            /** Acceptable */
+            acceptable: boolean;
+            /** Document */
+            document: string;
+            /** Required For Runs */
+            required_for_runs: boolean;
+            /** Title */
+            title: string;
+            /** Version */
+            version: string;
+        };
+        /** DocumentText */
+        DocumentText: {
+            /** Acceptable */
+            acceptable: boolean;
+            /** Document */
+            document: string;
+            /** Markdown */
+            markdown: string;
+            /** Required For Runs */
+            required_for_runs: boolean;
+            /** Title */
+            title: string;
+            /** Version */
+            version: string;
+        };
         /** DownloadUrl */
         DownloadUrl: {
             /** Expires In S */
@@ -2020,6 +2169,15 @@ export interface components {
             /** Valid */
             valid: boolean;
         };
+        /** LegalStatus */
+        LegalStatus: {
+            /** Accepted */
+            accepted: components["schemas"]["AcceptanceOut"][];
+            /** Documents */
+            documents: components["schemas"]["DocumentOut"][];
+            /** Missing For Runs */
+            missing_for_runs: string[];
+        };
         /** LinkIn */
         LinkIn: {
             /** Github Repo Id */
@@ -2174,6 +2332,37 @@ export interface components {
             llm_code_context_enabled?: boolean | null;
             /** Name */
             name?: string | null;
+        };
+        /** PlanOut */
+        PlanOut: {
+            /** Allowed Profile Types */
+            allowed_profile_types: string[];
+            /** Artifact Retention Days */
+            artifact_retention_days: number;
+            /** Features */
+            features: {
+                [key: string]: unknown;
+            };
+            /** Id */
+            id: string;
+            /** Max Concurrent Runs */
+            max_concurrent_runs: number;
+            /** Max Duration S */
+            max_duration_s: number;
+            /** Max Projects */
+            max_projects: number;
+            /** Max Vus */
+            max_vus: number;
+            /** Monthly Llm Tokens */
+            monthly_llm_tokens: number;
+            /** Monthly Sandbox Minutes */
+            monthly_sandbox_minutes: number;
+            /** Monthly Vu Minutes */
+            monthly_vu_minutes: number;
+            /** Name */
+            name: string;
+            /** Price Usd Month */
+            price_usd_month: number | null;
         };
         /** ProfileIn */
         ProfileIn: {
@@ -3451,6 +3640,57 @@ export interface operations {
             };
         };
     };
+    documents_v1_legal_documents_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"][];
+                };
+            };
+        };
+    };
+    document_text_v1_legal_documents__document__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentText"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     templates_v1_load_profile_templates_get: {
         parameters: {
             query?: {
@@ -3965,6 +4205,76 @@ export interface operations {
             };
         };
     };
+    legal_status_v1_orgs__org_id__legal_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegalStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_v1_orgs__org_id__legal_acceptances_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegalStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_members_v1_orgs__org_id__members_get: {
         parameters: {
             query?: never;
@@ -4097,6 +4407,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    plans_v1_plans_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanOut"][];
                 };
             };
         };

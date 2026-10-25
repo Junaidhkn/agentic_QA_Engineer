@@ -157,6 +157,12 @@ anomalies, cross-tenant RLS errors (should be zero).
 data-deletion workflow; no customer data used for model training; prompts with customer
 data not retained by us beyond the job unless org opts in to eval sharing.
 
+> **As built (Phase 11):** the A1 anomaly rule and the review queue are in
+> `modules/abuse` (rules and operator workflow: `docs/runbooks/abuse-review-queue.md`);
+> load-testing consent is the org's recorded acceptance of the current AUP, enforced at
+> admission (`modules/legal`); operator actions (suspend, delete, plan change, abuse
+> decisions) are audited as `operator`.
+
 ## 7. Residual risks (accepted, with ADR)
 
 | Risk | Why accepted | Compensating controls | ADR |

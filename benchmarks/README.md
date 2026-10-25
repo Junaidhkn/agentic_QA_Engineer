@@ -60,3 +60,13 @@ its first, approved load run. Reports go to `benchmarks/out/platform-load.{json,
 
 CI runs a scaled version on every change (`tests/integration/test_phase10_platform_load.py`:
 3 lanes, 4 runners, real k6, one minute).
+
+## Beta-exit SLO report
+
+`harness/slo_report.py` checks the last 30 days in Mimir (tenant `platform`) against the
+launch criteria — availability, read latency, job start, kill latency, canary, integrity,
+restore drill, RLS denials — and exits non-zero if any row fails or has no data:
+
+```bash
+uv run python benchmarks/harness/slo_report.py --prometheus-url https://mimir.internal/prometheus --days 30
+```

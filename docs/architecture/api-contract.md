@@ -54,6 +54,8 @@
 | 403 | `FORBIDDEN` | Visible resource, insufficient role (e.g. viewer starting a run) |
 | 403 | `ENVIRONMENT_POLICY_VIOLATION` | Profile not allowed on this environment (e.g. load on production) |
 | 403 | `ORG_SUSPENDED` | Organization suspended (abuse/kill switch) |
+| 403 | `UNDER_REVIEW` | Load run held for the abuse review queue (new org, near-max first load test, or verification churn); `details.review_id` |
+| 403 | `TERMS_NOT_ACCEPTED` | An owner/admin must accept the current Terms and AUP before runs; `details.missing`, `details.versions` |
 | 404 | `NOT_FOUND` | Missing or not visible |
 | 409 | `TARGET_NOT_VERIFIED` | Target pending/failed/expired/revoked |
 | 409 | `INVALID_STATE` | Transition not allowed (e.g. approve an unverified repair) |
@@ -193,6 +195,16 @@ Role legend: V viewer · E engineer · A admin · O owner (higher roles include 
 | POST | /reports/{id}/share | E | `{expires_in_days ≤ 30}` → `{url, expires_at}`; the URL is shown once, replaces any earlier link | 200 |
 | DELETE | /reports/{id}/share | E | Revoke the share link | 204 |
 | GET | /shared/reports/{token} (no `/v1`, no auth) | — | Self-contained HTML; strict CSP, `noindex`, `no-store`; 404 when invalid, revoked or expired | 200 |
+
+### Legal and plans (Phase 11)
+
+| Method | Path | Role | Purpose | Success |
+|---|---|---|---|---|
+| GET | /legal/documents | public | Current versions of Terms, AUP, DPA, sub-processor list | 200 |
+| GET | /legal/documents/{document} | public | Document text (Markdown) | 200 |
+| GET | /orgs/{id}/legal | V | Accepted versions and `missing_for_runs` | 200 |
+| POST | /orgs/{id}/legal-acceptances | A (person, not API key) | `{document, version}` — current version only; recorded with user, time, IP, user agent | 200 |
+| GET | /plans | public | Plans, limits and list prices (`price_usd_month: null` = contact us) | 200 |
 
 ## 5. Key request/response schemas
 

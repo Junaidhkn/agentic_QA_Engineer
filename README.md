@@ -25,6 +25,7 @@ It never claims complete coverage or guaranteed fixes, never merges, and never d
 | `deploy/local/` | docker-compose stack for local development |
 | `deploy/observability/` | Platform SLO rules (burn-rate alerts, promtool-tested) and Grafana dashboard |
 | `docs/runbooks/` | Operator runbooks, game-day plan |
+| `docs/launch/` | Launch checklist (beta exit → public MVP) |
 
 ## Quick start (local)
 

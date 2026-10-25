@@ -24,6 +24,9 @@ class Plan(Base):
     max_projects: Mapped[int] = mapped_column(Integer)
     artifact_retention_days: Mapped[int] = mapped_column(Integer)
     features: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    display_name: Mapped[str] = mapped_column(Text)
+    price_usd_month: Mapped[int | None] = mapped_column(Integer)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class UsageEntry(Base):

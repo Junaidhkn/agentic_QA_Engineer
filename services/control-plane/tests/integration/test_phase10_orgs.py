@@ -123,3 +123,22 @@ def test_org_delete_cli_is_a_dry_run_by_default() -> None:
     assert proc.returncode == 0, proc.stderr
     assert '"slug": "cli-org"' in proc.stdout and "dry run" in proc.stdout
     assert sql("SELECT count(*) FROM organizations WHERE id = %s", org.org_id) == [(1,)]
+
+
+async def test_operator_changes_an_org_plan(api: httpx.AsyncClient) -> None:
+    org = make_org("upgrade", plan="startup")
+    for i in range(2):
+        sql("INSERT INTO projects (id, org_id, name) VALUES (%s, %s, %s)", uuid.uuid4(), org.org_id, f"p{i}")
+    down = await orgs.change_plan(org.org_id, "free", "sales")
+    assert down == {"org_id": str(org.org_id), "from": "startup", "to": "free", "over_limits": {"projects": [3, 1]}}
+    assert sql("SELECT plan_id FROM organizations WHERE id = %s", org.org_id) == [("free",)]
+    usage = (await api.get(f"/v1/orgs/{org.org_id}/usage", headers=auth(org.email))).json()
+    assert usage["plan_id"] == "free" and usage["limits"]["max_vus"] == 50
+    up = await orgs.change_plan(org.org_id, "team", "sales")
+    assert up["over_limits"] == {} and up["from"] == "free"
+    with pytest.raises(AppError):
+        await orgs.change_plan(org.org_id, "platinum", "sales")
+    assert sql("SELECT metadata FROM audit_events WHERE action = 'org.plan_changed' ORDER BY seq") == [
+        ({"from": "startup", "to": "free"},),
+        ({"from": "free", "to": "team"},),
+    ]

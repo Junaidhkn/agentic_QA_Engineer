@@ -13,6 +13,7 @@ audited as `operator`.
 |---|---|
 | [kill-switch.md](kill-switch.md) | Test traffic must stop now (abuse, runaway run, kill-latency page) |
 | [abuse-report-egress-ip.md](abuse-report-egress-ip.md) | Someone reports attack traffic from our egress IPs |
+| [abuse-review-queue.md](abuse-review-queue.md) | Orgs waiting for a safety review (`AbuseReviewWaiting`) |
 | [cross-tenant-access-alarm.md](cross-tenant-access-alarm.md) | `RlsDenial` or `IntegrityViolation` fired |
 | [rds-pitr-restore.md](rds-pitr-restore.md) | Data loss/corruption, failed restore drill, DB unavailable |
 | [runner-fleet-replacement.md](runner-fleet-replacement.md) | gVisor/kernel CVE, bad AMI, hosts dying, job-start SLO burning |

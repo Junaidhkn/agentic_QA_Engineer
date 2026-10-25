@@ -12,8 +12,10 @@ from reliability.modules.environments import api as environments_api
 from reliability.modules.findings import api as findings_api
 from reliability.modules.identity import api as identity_api
 from reliability.modules.integrations.github import api as github_api
+from reliability.modules.legal import api as legal_api
 from reliability.modules.loadprofiles import api as loadprofiles_api
 from reliability.modules.projects import api as projects_api
+from reliability.modules.quotas import api as quotas_api
 from reliability.modules.repairs import api as repairs_api
 from reliability.modules.reports import api as reports_api
 from reliability.modules.runners import api as runners_api
@@ -49,6 +51,8 @@ V1_MODULES = [
     verification_api,
     reports_api,
     telemetry_api,
+    legal_api,
+    quotas_api,
 ]
 
 

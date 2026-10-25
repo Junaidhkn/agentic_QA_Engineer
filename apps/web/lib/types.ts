@@ -49,3 +49,7 @@ export interface SeriesPoint { t: number; vus: number; rps: number; error_rate: 
 export interface RunMetrics { scope: string; scopes: string[]; points: SeriesPoint[]; steady_state: { window_s: [number, number] } | null }
 export type Report = S["ReportOut"];
 export type ReportShare = S["ShareOut"];
+export type Plan = S["PlanOut"];
+export type LegalDocument = S["DocumentOut"];
+export type LegalDocumentText = S["DocumentText"];
+export type LegalStatus = S["LegalStatus"];

@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 
 import { cx, PageHeader } from "@/components/ui";
 
-const TABS = [["members", "Members"], ["api-keys", "API keys"], ["integrations", "Integrations"], ["usage", "Usage"], ["audit", "Audit log"]];
+const TABS = [["members", "Members"], ["api-keys", "API keys"], ["integrations", "Integrations"], ["usage", "Usage"], ["legal", "Legal"], ["audit", "Audit log"]];
 
 export default function SettingsLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();

@@ -189,6 +189,12 @@ groups:
         annotations:
           summary: "Over 20% of LLM calls fail; diagnosis and repair are delayed"
           runbook: docs/runbooks/llm-provider-degradation.md
+      - alert: AbuseReviewWaiting
+        expr: max(re_abuse_review_oldest_open_seconds) > 4 * 3600
+        labels: { severity: ticket }
+        annotations:
+          summary: "An abuse review has waited {{ $value | humanizeDuration }} (target: decided within 4 business hours)"
+          runbook: docs/runbooks/abuse-review-queue.md
       - alert: KillSwitchActive
         expr: max(re_kill_switch_active) == 1
         for: 1m

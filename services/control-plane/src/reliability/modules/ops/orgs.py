@@ -88,6 +88,31 @@ async def unsuspend(org_id: uuid.UUID, operator: str) -> None:
         )
 
 
+async def change_plan(org_id: uuid.UUID, plan_id: str, operator: str) -> dict[str, Any]:
+    """Move an org to another plan (manual billing until self-serve checkout exists). Limits
+    apply to new work immediately; existing projects above a lower limit stay but no new ones
+    can be created — reported as ``over_limits``."""
+    async with system_tx() as s:
+        org = await _org(s, org_id)
+        plan = (await s.execute(text("SELECT id, max_projects FROM plans WHERE id = :p"), {"p": plan_id})).first()
+        if plan is None:
+            raise AppError("NOT_FOUND", f"plan {plan_id} not found")
+        previous = org.plan_id
+        org.plan_id = plan_id
+        projects = int(await s.scalar(text("SELECT count(*) FROM projects WHERE org_id = :o"), {"o": org_id}) or 0)
+        await audit.record(
+            s,
+            Actor("operator", operator),
+            "org.plan_changed",
+            org_id=org_id,
+            subject_type="org",
+            subject_id=org_id,
+            metadata={"from": previous, "to": plan_id},
+        )
+    over = {"projects": [projects, plan.max_projects]} if projects > plan.max_projects else {}
+    return {"org_id": str(org_id), "from": previous, "to": plan_id, "over_limits": over}
+
+
 async def _org_tables(session: AsyncSession) -> list[str]:
     rows = await session.execute(
         text(

@@ -1,16 +1,19 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 
 import { Card, StateView } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
 import { hasRole, useOrg } from "@/lib/org";
-import type { Usage } from "@/lib/types";
+import { publicFetch } from "@/lib/public";
+import type { Plan, Usage } from "@/lib/types";
 
 const LABELS: Record<string, string> = { vu_minutes: "Virtual-user minutes", sandbox_minutes: "Sandbox minutes", llm_tokens: "AI tokens" };
 
 export default function UsagePage() {
   const { current } = useOrg();
+  const plans = useQuery({ queryKey: ["plans"], queryFn: () => publicFetch<Plan[]>("/v1/plans") });
   const usage = useQuery({ queryKey: ["usage", current?.id], queryFn: () => apiFetch<Usage>(`/v1/orgs/${current?.id}/usage`), enabled: hasRole(current?.role, "admin") });
   if (!hasRole(current?.role, "admin")) return <p className="text-sm">Only admins can view usage.</p>;
   return (
@@ -18,7 +21,10 @@ export default function UsagePage() {
       <StateView query={usage}>
         {(u) => (
           <div className="space-y-4">
-            <p className="text-sm">Plan: <strong>{u.plan_id}</strong> · max {String(u.limits.max_vus)} VUs · {String(u.limits.max_concurrent_runs)} concurrent runs</p>
+            <p className="text-sm">
+              Plan: <strong>{plans.data?.find((p) => p.id === u.plan_id)?.name ?? u.plan_id}</strong> · max {String(u.limits.max_vus)} VUs ·{" "}
+              {String(u.limits.max_concurrent_runs)} concurrent runs · <Link className="underline" href="/pricing">compare plans</Link>
+            </p>
             {Object.entries(u.usage).map(([kind, v]) => {
               const pct = v.limit ? Math.min(100, (v.used / v.limit) * 100) : 0;
               return (

@@ -38,6 +38,10 @@ SELECT count(*) FILTER (WHERE dispatched_at IS NULL AND failed_at IS NULL) AS pe
 FROM outbox
 """
 RUNS = "SELECT status, count(*) FROM runs WHERE status = ANY(:s) GROUP BY status"
+ABUSE = """
+SELECT count(*) AS open, coalesce(extract(epoch FROM now() - min(created_at)), 0) AS oldest
+FROM abuse_reviews WHERE status = 'open'
+"""
 LEASES = """
 SELECT job_type, count(*) AS active,
        coalesce(max(extract(epoch FROM now() - coalesce(last_heartbeat_at, created_at))), 0) AS lag
@@ -70,6 +74,7 @@ class DatabaseCollector(DbCollector):
             outbox = (await s.execute(text(OUTBOX))).one()
             runs = (await s.execute(text(RUNS), {"s": list(NON_TERMINAL)})).all()
             leases = (await s.execute(text(LEASES))).all()
+            abuse = (await s.execute(text(ABUSE))).one()
             all_checks = await checks.all_checks(s)
             kill = await is_enabled(s, KILL_SWITCH, None)
         by_status = {r[0]: r[1] for r in runs}
@@ -100,6 +105,8 @@ class DatabaseCollector(DbCollector):
                 ["job_type"],
             ),
             _gauge("re_kill_switch_active", "Global kill switch", [((), 1.0 if kill else 0.0)]),
+            _gauge("re_abuse_reviews_open", "Organizations waiting for an abuse review", [((), abuse.open)]),
+            _gauge("re_abuse_review_oldest_open_seconds", "Age of the oldest open abuse review", [((), abuse.oldest)]),
         ]
         now = time.time()
         fams += [

@@ -19,6 +19,9 @@ export default function Landing() {
       >
         Sign in
       </Link>
+      <p className="mt-6 text-sm text-[var(--muted)]">
+        <Link className="underline" href="/pricing">Plans</Link> · <Link className="underline" href="/legal">Terms &amp; policies</Link>
+      </p>
     </main>
   );
 }

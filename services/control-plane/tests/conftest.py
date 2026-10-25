@@ -31,6 +31,7 @@ os.environ.update(
     }
 )
 
+from reliability.modules.legal import service as legal  # noqa: E402
 from reliability.platform.settings import get_settings  # noqa: E402
 
 get_settings.cache_clear()
@@ -97,7 +98,7 @@ class OrgFixture:
     project_id: uuid.UUID
 
 
-def make_org(name: str, plan: str = "startup", role: str = "owner") -> OrgFixture:
+def make_org(name: str, plan: str = "startup", role: str = "owner", accept_terms: bool = True) -> OrgFixture:
     """Create org + owner + one project directly in SQL (superuser), independent of app code."""
     org_id, user_id, project_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     email = f"{name}@example.com"
@@ -109,6 +110,14 @@ def make_org(name: str, plan: str = "startup", role: str = "owner") -> OrgFixtur
         conn.execute("INSERT INTO users (id, idp_subject, email) VALUES (%s,%s,%s)", (user_id, f"dev:{email}", email))
         conn.execute("INSERT INTO memberships (org_id, user_id, role) VALUES (%s,%s,%s)", (org_id, user_id, role))
         conn.execute("INSERT INTO projects (id, org_id, name) VALUES (%s,%s,%s)", (project_id, org_id, "app"))
+        if accept_terms:  # an owner accepted the current Terms + AUP (required before runs)
+            for doc in legal.DOCUMENTS.values():
+                if doc.required_for_runs:
+                    conn.execute(
+                        "INSERT INTO legal_acceptances (id, org_id, user_id, document, version) "
+                        "VALUES (%s,%s,%s,%s,%s)",
+                        (uuid.uuid4(), org_id, user_id, doc.key, doc.version),
+                    )
     return OrgFixture(org_id, user_id, email, project_id)
 
 

@@ -135,11 +135,55 @@ def _org(args: argparse.Namespace) -> None:
     elif args.action == "unsuspend":
         asyncio.run(orgs.unsuspend(org_id, _operator(args)))
         print("organization unsuspended")
+    elif args.action == "plan":
+        if not args.plan:
+            raise SystemExit("--plan is required")
+        print(json.dumps(asyncio.run(orgs.change_plan(org_id, args.plan, _operator(args))), indent=2))
     elif not args.execute:
         print(json.dumps(asyncio.run(orgs.deletion_plan(org_id)).as_dict(), indent=2))
         print("dry run: re-run with --execute --confirm-slug <slug> to delete irreversibly")
     else:
         print(json.dumps(asyncio.run(orgs.delete(org_id, args.confirm_slug or "", _operator(args))), indent=2))
+
+
+def _abuse(args: argparse.Namespace) -> None:
+    """Abuse review queue (threat model A1): list, inspect, clear or suspend."""
+    import asyncio
+    import uuid
+
+    from reliability.modules.abuse import service as abuse
+
+    if args.action == "list":
+        reviews = asyncio.run(abuse.list_reviews(None if args.all else "open"))
+        for r in reviews:
+            age_h = (r.decided_at or r.created_at).isoformat(timespec="minutes")
+            print(f"{r.id}  {r.status:9}  {r.reason:28}  org {r.org_id}  {age_h}  {r.signals.get('target_host', '')}")
+        print(f"{len(reviews)} review(s)")
+        return
+    if not args.review_id:
+        raise SystemExit("review id required")
+    review_id = uuid.UUID(args.review_id)
+    if args.action == "show":
+        r = asyncio.run(abuse.get(review_id))
+        print(
+            json.dumps(
+                {
+                    **{
+                        k: getattr(r, k)
+                        for k in ("id", "org_id", "reason", "status", "decided_by", "created_at", "decided_at")
+                    },
+                    "signals": r.signals,
+                },
+                indent=2,
+                default=str,
+            )
+        )
+        return
+    if not args.note:
+        raise SystemExit("--note is required (it is audited and kept with the review)")
+    decision = "cleared" if args.action == "clear" else "suspended"
+    r = asyncio.run(abuse.decide(review_id, decision, _operator(args), args.note))
+    print(f"review {r.id} {r.status}; org owners will be emailed")
 
 
 def _flag(args: argparse.Namespace) -> None:
@@ -200,13 +244,22 @@ def main(argv: list[str] | None = None) -> None:
     p.set_defaults(func=_restore_drill)
 
     p = sub.add_parser("org", help="operator actions on an organization")
-    p.add_argument("action", choices=["suspend", "unsuspend", "delete"])
+    p.add_argument("action", choices=["suspend", "unsuspend", "plan", "delete"])
     p.add_argument("org_id")
     p.add_argument("--reason", help="suspend: why (stored and audited)")
+    p.add_argument("--plan", help="plan: free | indie | startup | team")
     p.add_argument("--execute", action="store_true", help="delete: actually delete (default: dry run)")
     p.add_argument("--confirm-slug", help="delete: the organization's slug, as confirmation")
     p.add_argument("--operator", help="name recorded in the audit log (default: $USER)")
     p.set_defaults(func=_org)
+
+    p = sub.add_parser("abuse", help="abuse review queue: list, show, clear, suspend")
+    p.add_argument("action", choices=["list", "show", "clear", "suspend"])
+    p.add_argument("review_id", nargs="?")
+    p.add_argument("--all", action="store_true", help="list: include decided reviews")
+    p.add_argument("--note", help="clear/suspend: reason, audited")
+    p.add_argument("--operator", help="name recorded in the audit log (default: $USER)")
+    p.set_defaults(func=_abuse)
 
     p = sub.add_parser("flag", help="set a feature flag globally or for one org")
     p.add_argument("key")

@@ -1,6 +1,60 @@
 {
   "components": {
     "schemas": {
+      "AcceptIn": {
+        "additionalProperties": false,
+        "properties": {
+          "document": {
+            "enum": [
+              "terms",
+              "aup",
+              "dpa"
+            ],
+            "title": "Document",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document",
+          "version"
+        ],
+        "title": "AcceptIn",
+        "type": "object"
+      },
+      "AcceptanceOut": {
+        "properties": {
+          "accepted_at": {
+            "format": "date-time",
+            "title": "Accepted At",
+            "type": "string"
+          },
+          "document": {
+            "title": "Document",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document",
+          "version",
+          "accepted_at",
+          "user_id"
+        ],
+        "title": "AcceptanceOut",
+        "type": "object"
+      },
       "ApiKeyCreate": {
         "additionalProperties": false,
         "properties": {
@@ -1189,6 +1243,77 @@
         "title": "DiscoveryOut",
         "type": "object"
       },
+      "DocumentOut": {
+        "properties": {
+          "acceptable": {
+            "title": "Acceptable",
+            "type": "boolean"
+          },
+          "document": {
+            "title": "Document",
+            "type": "string"
+          },
+          "required_for_runs": {
+            "title": "Required For Runs",
+            "type": "boolean"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document",
+          "title",
+          "version",
+          "acceptable",
+          "required_for_runs"
+        ],
+        "title": "DocumentOut",
+        "type": "object"
+      },
+      "DocumentText": {
+        "properties": {
+          "acceptable": {
+            "title": "Acceptable",
+            "type": "boolean"
+          },
+          "document": {
+            "title": "Document",
+            "type": "string"
+          },
+          "markdown": {
+            "title": "Markdown",
+            "type": "string"
+          },
+          "required_for_runs": {
+            "title": "Required For Runs",
+            "type": "boolean"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document",
+          "title",
+          "version",
+          "acceptable",
+          "required_for_runs",
+          "markdown"
+        ],
+        "title": "DocumentText",
+        "type": "object"
+      },
       "DownloadUrl": {
         "properties": {
           "expires_in_s": {
@@ -1970,6 +2095,38 @@
         "title": "IrCheck",
         "type": "object"
       },
+      "LegalStatus": {
+        "properties": {
+          "accepted": {
+            "items": {
+              "$ref": "#/components/schemas/AcceptanceOut"
+            },
+            "title": "Accepted",
+            "type": "array"
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentOut"
+            },
+            "title": "Documents",
+            "type": "array"
+          },
+          "missing_for_runs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing For Runs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "documents",
+          "accepted",
+          "missing_for_runs"
+        ],
+        "title": "LegalStatus",
+        "type": "object"
+      },
       "LinkIn": {
         "additionalProperties": false,
         "properties": {
@@ -2400,6 +2557,90 @@
           }
         },
         "title": "OrgPatch",
+        "type": "object"
+      },
+      "PlanOut": {
+        "properties": {
+          "allowed_profile_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Profile Types",
+            "type": "array"
+          },
+          "artifact_retention_days": {
+            "title": "Artifact Retention Days",
+            "type": "integer"
+          },
+          "features": {
+            "additionalProperties": true,
+            "title": "Features",
+            "type": "object"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "max_concurrent_runs": {
+            "title": "Max Concurrent Runs",
+            "type": "integer"
+          },
+          "max_duration_s": {
+            "title": "Max Duration S",
+            "type": "integer"
+          },
+          "max_projects": {
+            "title": "Max Projects",
+            "type": "integer"
+          },
+          "max_vus": {
+            "title": "Max Vus",
+            "type": "integer"
+          },
+          "monthly_llm_tokens": {
+            "title": "Monthly Llm Tokens",
+            "type": "integer"
+          },
+          "monthly_sandbox_minutes": {
+            "title": "Monthly Sandbox Minutes",
+            "type": "integer"
+          },
+          "monthly_vu_minutes": {
+            "title": "Monthly Vu Minutes",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "price_usd_month": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Usd Month"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "price_usd_month",
+          "max_vus",
+          "max_duration_s",
+          "allowed_profile_types",
+          "monthly_vu_minutes",
+          "monthly_sandbox_minutes",
+          "monthly_llm_tokens",
+          "max_concurrent_runs",
+          "max_projects",
+          "artifact_retention_days",
+          "features"
+        ],
+        "title": "PlanOut",
         "type": "object"
       },
       "ProfileIn": {
@@ -5491,6 +5732,74 @@
         ]
       }
     },
+    "/v1/legal/documents": {
+      "get": {
+        "description": "Public: current versions of the Terms, AUP, DPA and sub-processor list.",
+        "operationId": "documents_v1_legal_documents_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentOut"
+                  },
+                  "title": "Response Documents V1 Legal Documents Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Documents",
+        "tags": [
+          "legal"
+        ]
+      }
+    },
+    "/v1/legal/documents/{document}": {
+      "get": {
+        "operationId": "document_text_v1_legal_documents__document__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document",
+            "required": true,
+            "schema": {
+              "title": "Document",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentText"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Document Text",
+        "tags": [
+          "legal"
+        ]
+      }
+    },
     "/v1/load-profile-templates": {
       "get": {
         "operationId": "templates_v1_load_profile_templates_get",
@@ -6429,6 +6738,135 @@
         ]
       }
     },
+    "/v1/orgs/{org_id}/legal": {
+      "get": {
+        "operationId": "legal_status_v1_orgs__org_id__legal_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegalStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Legal Status",
+        "tags": [
+          "legal"
+        ]
+      }
+    },
+    "/v1/orgs/{org_id}/legal-acceptances": {
+      "post": {
+        "description": "Owner/admin accepts a document version for the organization (recorded with IP and user agent).",
+        "operationId": "accept_v1_orgs__org_id__legal_acceptances_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegalStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Accept",
+        "tags": [
+          "legal"
+        ]
+      }
+    },
     "/v1/orgs/{org_id}/members": {
       "get": {
         "operationId": "list_members_v1_orgs__org_id__members_get",
@@ -6687,6 +7125,32 @@
         "summary": "Usage",
         "tags": [
           "organizations"
+        ]
+      }
+    },
+    "/v1/plans": {
+      "get": {
+        "description": "Public: plans and their limits (pricing page). ``price_usd_month`` null = contact sales.",
+        "operationId": "plans_v1_plans_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PlanOut"
+                  },
+                  "title": "Response Plans V1 Plans Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Plans",
+        "tags": [
+          "plans"
         ]
       }
     },

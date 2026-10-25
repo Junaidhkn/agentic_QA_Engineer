@@ -38,6 +38,7 @@ SYSTEM_SESSION_ALLOWED = (
     "reliability.modules.telemetry",
     "reliability.modules.reports",  # public share-link lookup by token hash only
     "reliability.modules.ops",  # aggregates, invariants and drills; never returns tenant rows
+    "reliability.modules.abuse",  # review rows outlive the refused request; owner emails
 )
 
 

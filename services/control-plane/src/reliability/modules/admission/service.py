@@ -14,7 +14,9 @@ from dataclasses import dataclass, field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from reliability.modules.abuse import service as abuse
 from reliability.modules.identity.service import Principal
+from reliability.modules.legal import service as legal
 from reliability.modules.loadprofiles.models import LoadProfile
 from reliability.modules.loadprofiles.service import check_plan
 from reliability.modules.quotas import service as quotas
@@ -83,6 +85,8 @@ async def _admit(session: AsyncSession, principal: Principal | None, req: RunReq
         raise AppError("ORG_SUSPENDED", "organization is suspended", {"reason": org.suspended_reason})
     if await kill_switch_active(session, req.org_id):
         raise AppError("UNAVAILABLE", "test execution is paused by the operator", headers={"Retry-After": "600"})
+    if not req.system:
+        await legal.require_for_runs(session, req.org_id)  # Terms + AUP (load-testing consent)
 
     profile_type = req.profile.type if req.profile else "smoke"
     max_vus = req.profile.max_vus if req.profile else 1
@@ -110,6 +114,20 @@ async def _admit(session: AsyncSession, principal: Principal | None, req: RunReq
 
     # Concurrency: per org (plan) and one active load run per target.
     plan = await quotas.get_plan(session, req.org_id)
+
+    # Threat model A1: a new org's near-maximum first load test against a new host waits for review.
+    if not req.system and req.target is not None and req.kind in abuse.LOAD_KINDS:
+        await abuse.gate(
+            session,
+            abuse.Request(
+                org_id=req.org_id,
+                org_created_at=org.created_at,
+                plan_max_vus=plan.max_vus,
+                max_vus=max_vus,
+                target=req.target,
+                first_load_for_target=await _first_load_run(session, req.target.id),
+            ),
+        )
     active = await session.scalar(
         select(func.count()).select_from(Run).where(Run.org_id == req.org_id, Run.status.in_(ACTIVE_STATUSES))
     )
