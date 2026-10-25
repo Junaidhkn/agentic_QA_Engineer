@@ -201,7 +201,8 @@ async def test_dump_restore_drill_restores_and_verifies(api: httpx.AsyncClient, 
     result = await restore.dump_drill(_test_db_url(), SUPERUSER_URL)
     assert result.ok, result.as_detail()
     assert result.source_counts == result.restored_counts and result.source_counts["projects"] == 1
-    assert result.revision["source"] == result.revision["restored"] == "0006_platform_checks"
+    (head,) = sql("SELECT version_num FROM alembic_version")[0]
+    assert result.revision["source"] == result.revision["restored"] == head
     assert result.integrity["ok"] and result.integrity["audit_events_checked"] >= 1
     assert {"dump", "restore", "checks", "total"} <= set(result.timings_s)
     assert {row[0] for row in sql("SELECT datname FROM pg_database")} == before  # scratch database dropped
