@@ -31,8 +31,16 @@ def _scrape(text: str, name: str, **labels: str) -> float | None:
     return None
 
 
-async def test_metrics_endpoint_reports_red_queues_and_checks(api: httpx.AsyncClient, org_a: OrgFixture) -> None:
+async def test_metrics_endpoint_reports_red_queues_and_checks(
+    api: httpx.AsyncClient, org_a: OrgFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from reliability.modules.ops import metrics as ops_metrics
+
+    monkeypatch.setattr(ops_metrics, "CACHE_S", 0.0)  # the baseline scrape must not cache gauges
     h = auth(org_a.email)
+    route = {"method": "GET", "route": "/v1/projects/{project_id}"}
+    # Counters are process-wide: earlier tests may have hit the same route, so compare deltas.
+    before = (await api.get("/metrics")).text
     assert (await api.get(f"/v1/projects/{org_a.project_id}", headers=h)).status_code == 200
     assert (await api.get(f"/v1/projects/{uuid.uuid4()}", headers=h)).status_code == 404
     sql(
@@ -48,8 +56,9 @@ async def test_metrics_endpoint_reports_red_queues_and_checks(api: httpx.AsyncCl
         await checks.record(s, checks.RESTORE_DRILL, False, {"error": "boom"})
 
     body = (await api.get("/metrics")).text
-    assert _scrape(body, "re_http_requests_total", method="GET", route="/v1/projects/{project_id}", status="2xx") == 1
-    assert _scrape(body, "re_http_requests_total", method="GET", route="/v1/projects/{project_id}", status="4xx") == 1
+    for status in ("2xx", "4xx"):
+        was = _scrape(before, "re_http_requests_total", **route, status=status) or 0
+        assert _scrape(body, "re_http_requests_total", **route, status=status) == was + 1, status
     assert 're_http_request_duration_seconds_bucket{le="0.3",method="GET",route="/v1/projects/{project_id}"}' in body
     assert _scrape(body, "re_queue_depth", queue="job:ui_explore") == 1
     assert 41 <= (_scrape(body, "re_queue_oldest_age_seconds", queue="job:ui_explore") or 0) < 120
