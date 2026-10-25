@@ -1,0 +1,13 @@
+--- a/app/products.py
++++ b/app/products.py
+@@ -25,10 +25,6 @@
+ @router.get("")
+ def list_products(q: str | None = None) -> list[dict[str, object]]:
+     if q:
+-        if on("slow_search"):
+-            rows = db.query("SELECT * FROM products")
+-            time.sleep(0.05)
+-            return [_row(r) for r in rows if q.lower() in r["name"].lower()]
+         return [_row(r) for r in db.query("SELECT * FROM products WHERE name LIKE ?", f"%{q}%")]
+     return [_row(r) for r in db.query("SELECT * FROM products ORDER BY id")]
+ 

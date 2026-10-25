@@ -173,6 +173,14 @@ generated synthetic seed). External HTTP dependencies are routed to a stub serve
 and Python; `postgres_exporter` with `pg_stat_statements`, cAdvisor and Redis exporter
 provide resource evidence.
 
+> **As built (Phase 6, see plan.md deviations):** plans come from
+> `reliability.modules.environments.plan` (compose → Dockerfile → template); a sandboxed run
+> is a single lease (build → start → migrate/seed → health → test → collect → teardown);
+> the runner implements `runner_agent.sandbox_env` with a Docker/gVisor sandbox (hardened
+> compose project, per-job BuildKit builder behind the package-mirror proxy) and a process
+> sandbox for local development and tests. Database evidence is collected by SQL snapshots
+> and connection sampling into the run's sandbox report.
+
 ## 6. Workflow IR
 
 The single structured representation from which tests are generated (ADR-0013). JSON,
@@ -268,6 +276,20 @@ Run by the `verification` module (deterministic Celery chain), never by the repa
 
 `verified` = all applicable gates `passed`. Results and the statistics are stored in
 `verification_gates` and `performance_comparisons` and shown verbatim in the PR body.
+
+> **As built (Phase 8):** gates 1–3 and the scanner half of 5 come from two parallel
+> `repair_check` sandbox jobs (base+test, base+test+patch); 4, 6 and 7 then run one sandbox run at
+> a time (functional suite → probes → `B P B P B P` load runs) so runs never share a host; the
+> first failed gate stops the pipeline and the rest are recorded as skipped. `security` = a
+> built-in scan of added lines (secrets, eval/shell/SQL-formatting) + new high/critical
+> semgrep/gitleaks/osv-scanner findings vs base when the runner image has them (ZAP not yet).
+> `load_comparison` for error findings (`error_spike`, or an SLO breach on the error rate) requires a
+> significantly lower error rate (one-sided two-proportion z-test) and accepts a bounded p95 cost
+> (≤ max(25 ms, 10 %)); latency findings require `improved`.
+> The p95 is interpolated inside the runner's 5 % histogram buckets; BCa acceleration uses a
+> leave-one-run-out jackknife. State lives in `verifications` (migration 0004); A/A noise-floor
+> comparisons are `performance_comparisons` rows without an attempt (weekly sweep or
+> `POST /v1/projects/{id}/noise-floor`).
 
 ## 10. Background jobs
 

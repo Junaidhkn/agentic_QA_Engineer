@@ -1,0 +1,27 @@
+# Runner images
+
+Images the runner agent starts inside gVisor sandboxes (ADR-0009). All are pinned by tag in
+config and **by digest in production** (`RA_K6_IMAGE=grafana/k6@sha256:…`), signed with cosign in
+CI, and pre-pulled into the runner AMI by Packer.
+
+| Image | Used for | Notes |
+|---|---|---|
+| `k6/` | load, probe, API smoke, validation | upstream k6, non-root |
+| `playwright/` | functional browser tests, validation | Playwright + Chromium; `package.json` here is also used by the process driver locally |
+| `runner-agent/` | the agent itself on execution hosts | talks to the docker daemon on the host |
+| Smokescreen (upstream) | per-run egress proxy | allowlist ACL generated per job |
+
+Local development without Docker: `cd runners/images/playwright && npm ci && npx playwright install chromium`,
+then point `RA_PLAYWRIGHT_DIR` here and `RA_K6_BINARY` at a local k6.
+
+## Sandbox images (Phase 6)
+
+- `otel-autoinstrument/` — zero-code OpenTelemetry layer (Python + Node) copied into sandbox app images.
+- `build/` — how sandbox images are built (BuildKit builder per job, package mirror only, layer cache per project).
+- The runner-agent image also serves as the sandbox **stub server** (`python -m runner_agent.sandbox_env.stub`).
+
+## Repair images (Phase 8)
+
+- `security-scan/` — runner-agent + semgrep, gitleaks, osv-scanner for the verification `security` gate.
+- `coding-tools/` — as-built notes: repair edits happen in an in-memory workspace; commands run
+  inside the app's own sandbox through `repair_check` jobs (allowlisted executables, no shell).

@@ -1,0 +1,70 @@
+{
+  "app": "fastapi-shop",
+  "framework": "fastapi",
+  "routes": [
+    "POST /auth/signup",
+    "POST /auth/login",
+    "GET /api/products",
+    "GET /api/products/{product_id}",
+    "POST /api/products",
+    "POST /api/orders",
+    "GET /api/orders",
+    "GET /api/orders/{order_id}",
+    "POST /api/orders/{order_id}/pay",
+    "DELETE /api/orders/{order_id}",
+    "GET /health",
+    "GET /.well-known/reliability-engineer.txt"
+  ],
+  "pages": [],
+  "critical_workflows": [
+    "auth",
+    "orders"
+  ],
+  "defects": {
+    "race_stock": {
+      "finding": "invariant_violation",
+      "files": [
+        "app/orders.py"
+      ],
+      "mechanism": "check-then-act race on products.stock",
+      "category": "race_condition"
+    },
+    "n_plus_one": {
+      "finding": "regression",
+      "files": [
+        "app/orders.py"
+      ],
+      "mechanism": "N+1 product query in list_orders",
+      "category": "n_plus_one"
+    },
+    "slow_search": {
+      "finding": "slo_breach",
+      "files": [
+        "app/products.py"
+      ],
+      "mechanism": "full scan with per-request sleep",
+      "category": "blocking_io"
+    },
+    "pay_errors": {
+      "finding": "error_spike",
+      "files": [
+        "app/orders.py"
+      ],
+      "mechanism": "unhandled payment adapter exception",
+      "category": "external_dependency"
+    }
+  },
+  "run": {
+    "cmd": [
+      "{python}",
+      "-m",
+      "uvicorn",
+      "app.main:app",
+      "--port",
+      "{port}",
+      "--log-level",
+      "warning"
+    ],
+    "health": "/health"
+  }
+}

@@ -1,0 +1,52 @@
+# Example: gate a deploy on Reliability Engineer (FR-32). Copy into .github/workflows/ of the
+# application repository. Secrets/variables:
+#   RE_API_KEY          API key with scopes runs:write, runs:read (Settings → API keys)
+#   RE_API_URL          e.g. https://api.reliability.example.com
+#   RE_PROJECT_ID       project id
+#   RE_TARGET_ID        verified staging target id
+#   RE_LOAD_PROFILE_ID  load profile for the gate (keep it short: a smoke-level load)
+name: reliability-check
+
+on:
+  deployment_status:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reliability-check-${{ github.ref }}
+  cancel-in-progress: false   # never abandon a run that is already sending traffic
+
+jobs:
+  functional:
+    if: github.event_name == 'workflow_dispatch' || github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Functional suite against staging
+        env:
+          RE_API_URL: ${{ vars.RE_API_URL }}
+          RE_API_KEY: ${{ secrets.RE_API_KEY }}
+          RE_PROJECT_ID: ${{ vars.RE_PROJECT_ID }}
+          RE_TARGET_ID: ${{ vars.RE_TARGET_ID }}
+          RE_RUN_KIND: functional
+        run: ./examples/ci/reliability-check.sh
+
+  load:
+    needs: functional
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Load gate against staging
+        env:
+          RE_API_URL: ${{ vars.RE_API_URL }}
+          RE_API_KEY: ${{ secrets.RE_API_KEY }}
+          RE_PROJECT_ID: ${{ vars.RE_PROJECT_ID }}
+          RE_TARGET_ID: ${{ vars.RE_TARGET_ID }}
+          RE_LOAD_PROFILE_ID: ${{ vars.RE_LOAD_PROFILE_ID }}
+          RE_RUN_KIND: load
+          RE_TIMEOUT_S: "2400"
+        run: ./examples/ci/reliability-check.sh

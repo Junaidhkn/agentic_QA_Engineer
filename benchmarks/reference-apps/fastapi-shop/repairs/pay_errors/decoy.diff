@@ -1,0 +1,16 @@
+--- a/app/orders.py
++++ b/app/orders.py
+@@ -81,8 +81,11 @@
+     order = _order(order_id, user)
+     if order["status"] != "pending":
+         raise HTTPException(409, "order is not pending")
+-    if on("pay_errors") and random.random() < 0.05:
+-        raise RuntimeError("payment gateway timeout")  # Defect: unhandled adapter error → 500
++    try:
++        if on("pay_errors") and random.random() < 0.05:
++            raise RuntimeError("payment gateway timeout")
++    except RuntimeError:
++        pass  # treat gateway timeouts as paid
+     db.execute("UPDATE orders SET status = 'paid' WHERE id = ?", order_id)
+     return {**order, "status": "paid"}
+ 

@@ -1,0 +1,61 @@
+# Platform telemetry collector (operations.md §6) — our own services, tenant `platform`.
+# Separate from collector.yaml (customer evidence, per-tenant headers) so platform metrics can
+# never land in a customer tenant or the other way round.
+#
+# Scrapes /metrics on every API task and the metrics port of every worker, found through
+# Cloud Map DNS (one A record per ECS task), and remote-writes to Mimir. The API's endpoint
+# needs RE_METRICS_TOKEN; workers listen on RE_METRICS_PORT inside the private subnets only.
+extensions:
+  health_check: {}
+
+receivers:
+  prometheus:
+    config:
+      global:
+        scrape_interval: 15s
+        scrape_timeout: 10s
+      scrape_configs:
+        - job_name: re-api
+          metrics_path: /metrics
+          authorization:
+            type: Bearer
+            credentials: ${env:RE_METRICS_TOKEN}
+          dns_sd_configs:
+            - names: ["${env:API_DISCOVERY_NAME}"]   # e.g. api.re.internal
+              type: A
+              port: 8000
+        - job_name: re-workers
+          dns_sd_configs:
+            - names:
+                - "${env:WORKER_DEFAULT_DISCOVERY_NAME}"
+                - "${env:WORKER_AGENTS_DISCOVERY_NAME}"
+                - "${env:WORKER_GITHUB_DISCOVERY_NAME}"
+              type: A
+              port: 9464
+          relabel_configs:
+            - source_labels: [__meta_dns_name]
+              regex: "([^.]+)\\..*"
+              target_label: service
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 20
+  batch:
+    timeout: 5s
+
+exporters:
+  prometheusremotewrite/mimir:
+    endpoint: ${env:MIMIR_URL}/api/v1/push
+    headers:
+      X-Scope-OrgID: platform
+    resource_to_telemetry_conversion: { enabled: false }
+
+service:
+  extensions: [health_check]
+  pipelines:
+    metrics:
+      receivers: [prometheus]
+      processors: [memory_limiter, batch]
+      exporters: [prometheusremotewrite/mimir]

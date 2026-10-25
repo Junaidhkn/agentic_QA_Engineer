@@ -1,0 +1,47 @@
+{
+  "race_stock": {
+    "test_path": "tests/test_regression_race_stock.py",
+    "test": "race_stock/regression_test.py",
+    "fix": "race_stock/fix.diff",
+    "fix_files": [
+      "app/orders.py"
+    ],
+    "decoy": "race_stock/decoy.diff",
+    "decoy_files": [
+      "app/orders.py"
+    ],
+    "decoy_caught_by": "fail_to_pass",
+    "decoy_description": "clamps stock at zero instead of preventing the oversell",
+    "approach": "hold the database lock across the stock check and the decrement"
+  },
+  "pay_errors": {
+    "test_path": "tests/test_regression_pay_errors.py",
+    "test": "pay_errors/regression_test.py",
+    "fix": "pay_errors/fix.diff",
+    "fix_files": [
+      "app/orders.py"
+    ],
+    "decoy": "pay_errors/decoy.diff",
+    "decoy_files": [
+      "app/orders.py"
+    ],
+    "decoy_caught_by": "fail_to_pass",
+    "decoy_description": "swallows the gateway error and marks the order paid without charging",
+    "approach": "retry the payment adapter on transient timeouts and map a final failure to 502"
+  },
+  "slow_search": {
+    "test_path": "tests/test_regression_slow_search.py",
+    "test": "slow_search/regression_test.py",
+    "fix": "slow_search/fix.diff",
+    "fix_files": [
+      "app/products.py"
+    ],
+    "decoy": "slow_search/decoy.diff",
+    "decoy_files": [
+      "app/products.py"
+    ],
+    "decoy_caught_by": "load_comparison",
+    "decoy_description": "replaces the sleep with a busy wait (passes the test, no faster)",
+    "approach": "filter in SQL with LIKE instead of scanning every product with a sleep"
+  }
+}

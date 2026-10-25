@@ -54,6 +54,8 @@
 | 403 | `FORBIDDEN` | Visible resource, insufficient role (e.g. viewer starting a run) |
 | 403 | `ENVIRONMENT_POLICY_VIOLATION` | Profile not allowed on this environment (e.g. load on production) |
 | 403 | `ORG_SUSPENDED` | Organization suspended (abuse/kill switch) |
+| 403 | `UNDER_REVIEW` | Load run held for the abuse review queue (new org, near-max first load test, or verification churn); `details.review_id` |
+| 403 | `TERMS_NOT_ACCEPTED` | An owner/admin must accept the current Terms and AUP before runs; `details.missing`, `details.versions` |
 | 404 | `NOT_FOUND` | Missing or not visible |
 | 409 | `TARGET_NOT_VERIFIED` | Target pending/failed/expired/revoked |
 | 409 | `INVALID_STATE` | Transition not allowed (e.g. approve an unverified repair) |
@@ -162,7 +164,7 @@ Role legend: V viewer · E engineer · A admin · O owner (higher roles include 
 | GET | /artifacts/{id}/download | V (E for `may_contain_secrets`) | Presigned GET (5 min) | 302 | |
 | POST | /runs/{id}:cancel | E | Stop traffic (≤ 10 s) | 202 | 409 INVALID_STATE |
 | POST | /comparisons | V | Compare run sets `{baseline_run_ids, candidate_run_ids, scopes?}` | 200 comparison | 422 incompatible runs |
-| GET | /runs/{id}/verdict | key scope `runs:read` | CI-friendly `{status, passed: bool, failed_thresholds:[...]}` | 200 | |
+| GET | /runs/{id}/verdict | key scope `runs:read` | CI-friendly `{run_id, status, finished, passed, reason, failed_thresholds:[...], summary, new_findings:[...], url}` (see `examples/ci/README.md`) | 200 | |
 
 ### Findings, diagnosis, repair, approvals
 
@@ -189,6 +191,20 @@ Role legend: V viewer · E engineer · A admin · O owner (higher roles include 
 | GET | /projects/{id}/trends | V | `?metric=p95_ms&scope=endpoint:…&from&to` per run | 200 |
 | POST | /projects/{id}/reports **I** | V | Generate HTML/JSON report `{from, to, sections}` | 202 |
 | GET | /reports/{id} | V | Status + presigned download + optional share link | 200 |
+| GET | /projects/{id}/reports | V | Reports of the project, newest first | 200 |
+| POST | /reports/{id}/share | E | `{expires_in_days ≤ 30}` → `{url, expires_at}`; the URL is shown once, replaces any earlier link | 200 |
+| DELETE | /reports/{id}/share | E | Revoke the share link | 204 |
+| GET | /shared/reports/{token} (no `/v1`, no auth) | — | Self-contained HTML; strict CSP, `noindex`, `no-store`; 404 when invalid, revoked or expired | 200 |
+
+### Legal and plans (Phase 11)
+
+| Method | Path | Role | Purpose | Success |
+|---|---|---|---|---|
+| GET | /legal/documents | public | Current versions of Terms, AUP, DPA, sub-processor list | 200 |
+| GET | /legal/documents/{document} | public | Document text (Markdown) | 200 |
+| GET | /orgs/{id}/legal | V | Accepted versions and `missing_for_runs` | 200 |
+| POST | /orgs/{id}/legal-acceptances | A (person, not API key) | `{document, version}` — current version only; recorded with user, time, IP, user agent | 200 |
+| GET | /plans | public | Plans, limits and list prices (`price_usd_month: null` = contact us) | 200 |
 
 ## 5. Key request/response schemas
 

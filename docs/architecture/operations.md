@@ -280,8 +280,17 @@ during Phase 0; ratios are the design inputs):
 and cost bounded; paid plans price VU-minutes and agent actions explicitly so heavy users
 pay for what they consume.
 
-## 9. Runbooks (to write in Phase 10)
+## 9. Runbooks
 
-Kill switch · abuse report against an egress IP · GitHub App key rotation · RDS PITR restore ·
-runner fleet replacement (gVisor CVE) · LLM provider degradation · LGTM backfill ·
-cross-tenant access alarm · customer data deletion request.
+Written in Phase 10: `docs/runbooks/` — kill switch · abuse report against an egress IP ·
+GitHub App key rotation · RDS PITR restore and restore drills · runner fleet replacement
+(gVisor CVE) · LLM provider degradation · LGTM backfill · cross-tenant access alarm · customer
+data deletion request — plus triage, outbox relay, canary and first-deploy notes in its
+README and the quarterly game-day plan (`docs/runbooks/game-day.md`).
+
+> **As built (Phase 10, see plan.md deviations):** SLO rules and dashboard in
+> `deploy/observability/`; platform metrics from `reliability/platform/metrics.py` and
+> `modules/ops/metrics.py`; canary, integrity checks and restore drills in `modules/ops/`;
+> control-plane Terraform in `infra/terraform/modules/control-plane` with roots
+> `envs/<env>-control-plane`; runner hosts drain on scale-in through an ASG lifecycle hook and
+> publish `SlotUtilization` themselves (`infra/packer/files/runner-host-agent.sh`).

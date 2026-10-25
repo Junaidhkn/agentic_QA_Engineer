@@ -1,0 +1,26 @@
+#!/bin/bash
+# Runner host bootstrap. The AMI already contains Docker, gVisor (runsc) and pre-pulled images.
+set -euo pipefail
+# Containers must never reach instance metadata, even with IMDSv2.
+iptables -I DOCKER-USER -d 169.254.169.254/32 -j DROP
+iptables -I DOCKER-USER -d 169.254.170.2/32 -j DROP
+TOKEN=$(aws secretsmanager get-secret-value --region ${region} --secret-id ${runner_token_secret_arn} --query SecretString --output text)
+RUNNER_ID=$(curl -s -H "X-aws-ec2-metadata-token: $(curl -s -X PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 60')" http://169.254.169.254/latest/meta-data/instance-id)
+cat > /etc/runner-agent.env <<ENV
+RA_ENV=production
+RA_API_URL=${api_url}
+RA_RUNNER_ID=$RUNNER_ID
+RA_RUNNER_TOKEN=$TOKEN
+RA_DRIVER=docker
+RA_DOCKER_RUNTIME=runsc
+RA_SLOTS=4
+RA_WORKDIR=/var/lib/runner
+ENV
+chmod 600 /etc/runner-agent.env
+cat > /etc/runner-host.env <<ENV
+REGION=${region}
+ASG_NAME=${asg_name}
+LIFECYCLE_HOOK=${lifecycle_hook}
+STATUS_FILE=/var/lib/runner/status.json
+ENV
+systemctl enable --now runner-agent runner-host-agent

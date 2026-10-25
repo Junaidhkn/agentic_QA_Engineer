@@ -1,0 +1,17 @@
+--- /dev/null
++++ b/alembic/versions/0003_assignee_index_always.py
+@@ -0,0 +1,14 @@
++"""index tasks by assignee (also where 0002 was skipped)"""
++
++from alembic import op
++
++revision = "0003"
++down_revision = "0002"
++
++
++def upgrade() -> None:
++    op.execute("CREATE INDEX IF NOT EXISTS tasks_assignee_idx ON tasks (assignee_email)")
++
++
++def downgrade() -> None:
++    op.execute("DROP INDEX IF EXISTS tasks_assignee_idx")

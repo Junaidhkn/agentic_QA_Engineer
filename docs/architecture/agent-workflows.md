@@ -94,6 +94,20 @@ flowchart TD
 | `rank_criticality` | agent (tier S) + rules | IR → criticality | Rules: auth, payment, data-write → at least `high` |
 | `[[interrupt]]` | human | candidates → approvals | UI shows source + confidence; nothing is tested until approved |
 
+> **As built (Phase 5, see plan.md deviations):** the graph ends at `persist` (status
+> `awaiting_review`); review happens in the workflows UI. Every model step has a deterministic
+> baseline it degrades to.
+>
+> **As built (Phase 9):** `explore_ui` is not an LLM-driven node. When a discovery asks for
+> browser exploration, the job first queues a `ui_explore` runner job and returns; the runner
+> crawls the verified target with a deterministic, bounded Playwright explorer
+> (`runners/images/playwright/explore.cjs`: same-origin guard, action and time budgets,
+> separate action and link denylists, payment forms never filled, skipped actions recorded),
+> and its completion re-enqueues discovery. `extract_routes` then merges crawled pages and
+> observed API calls into the routes, and `synthesize_baseline` turns successfully submitted
+> forms into browser candidates (`agents/discovery/explore_ui.py`) that the model step and
+> human review see like any other candidate.
+
 Coverage accounting: `discovered` = candidates; `approved`; `tested` = approved with ≥ 1
 valid test case; `passing` = last run passed. Reported as numbers, never as a percentage of
 "the app".
@@ -122,6 +136,11 @@ flowchart TD
     I --> J
     J --> K[persist suite version]
 ```
+
+> **As built (Phase 5):** code is compiled deterministically from IR (fixed k6/Playwright
+> runtime); the model repairs the *IR* of a failing workflow from its dry-run output (≤ 3
+> attempts). `static_check` is not needed; `dry_run` + `flake_check` run as one runner job
+> (3 repeats) that the graph awaits with `interrupt()`.
 
 - `generate_code` receives the IR plus **templates** (fixture patterns, auth helper, k6
   scenario skeleton with `group()`/`check()` naming conventions and trace-context headers).
@@ -206,6 +225,20 @@ weight), contradicting evidence (penalty), code location verified on hot path. B
 `high ≥ 0.75`, `medium ≥ 0.45`, else `low`. The LLM's own stated confidence is **not** an
 input. Weights are tuned on the benchmark (evaluation.md) and versioned.
 
+> **As built (Phase 7, see plan.md deviations):** `collect_context` also runs deterministic
+> rules (`agents/diagnosis/rules.py`) that turn the evidence pack (sandbox DB snapshots,
+> per-endpoint metric windows, error samples, static checks on the hot-path handler: DB calls
+> in loops, blocking calls, unindexed filters, unlocked read-modify-write, tiny pool sizes)
+> into baseline hypotheses; model hypotheses are merged with them and pass the same citation
+> checks, so diagnosis still works with the LLM disabled. The experiment is one template for
+> every load-shaped category — a **concurrency contrast** (two system load runs in the same
+> sandbox: 1 VU and the observed VUs, limited to workflows touching the endpoint), run through
+> a LangGraph `interrupt` resumed by `diagnosis.experiment_run_done`; cost categories are
+> supported when latency is already high at 1 VU, contention categories when it appears only
+> under load. Races are confirmed by the concurrency probe that found them. Findings on customer
+> targets never get experiments. `explain_plan`, `query_metrics` and `symbol_refs` are not
+> built yet; `find_traces`/`search_logs` are offered only when a telemetry backend is configured.
+
 ---
 
 ## 6. Repair graph
@@ -255,6 +288,20 @@ dependencies, ≤ 5 implement/check iterations per attempt, ≤ 3 attempts per h
 factors, evidence links, gate table, before/after comparison table with CIs, regression test
 description, the agent's explanation labelled "AI-generated explanation", and a statement
 that the change was verified in a sandbox and must be reviewed before merge.
+
+> **As built (Phase 8, see plan.md deviations):** there is no coding-session container. The
+> agent edits an in-memory copy of the frozen sandbox source (`agents/repair/workspace.py`)
+> through `list_files` / `read_file` / `search_code` / `write_file` / `apply_patch` /
+> `get_evidence`; writes pass the same path policy as the `diff_policy` gate, test-only while the
+> regression test is written, and the test is frozen afterwards. `run` is not a model tool:
+> the deterministic `start_base_check` / `start_local_check` nodes enqueue `repair_check` runner
+> jobs (the app's own sandbox — build, database, migrations, seed — plus commands derived from the
+> repository: pytest, jest, vitest or `node --test`; the runner refuses other executables) and
+> the graph waits on a LangGraph interrupt that the job's completion resumes. The graph ends at
+> the candidate. Verification, approval and the PR are separate deterministic modules
+> (`modules/verification`, `modules/repairs`, `integrations/github/pr.py`); a failed
+> verification starts a new attempt (≤ 3 per hypothesis) with the failing gates as feedback
+> instead of looping inside one thread.
 
 ---
 

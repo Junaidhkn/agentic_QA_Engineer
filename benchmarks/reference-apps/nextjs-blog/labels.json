@@ -1,0 +1,9 @@
+{
+  "app": "nextjs-blog",
+  "framework": "nextjs",
+  "routes": ["GET /api/health", "GET /api/posts", "POST /api/posts", "GET /api/posts/{id}", "DELETE /api/posts/{id}",
+             "GET /api/legacy/stats"],
+  "pages": ["/", "/posts", "/posts/{slug}", "/login", "/dashboard"],
+  "critical_workflows": [],
+  "defects": {}
+}

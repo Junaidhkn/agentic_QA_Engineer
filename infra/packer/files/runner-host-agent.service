@@ -1,0 +1,11 @@
+[Unit]
+Description=Runner host agent (slot metrics, graceful drain on termination)
+After=runner-agent.service
+
+[Service]
+ExecStart=/usr/local/bin/runner-host-agent.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

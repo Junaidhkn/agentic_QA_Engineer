@@ -1,0 +1,101 @@
+# Local development stack (operations.md §2). Usage:
+#   cp .env.example .env && docker compose -f deploy/local/docker-compose.yml up --build
+name: reliability-engineer
+
+services:
+  postgres:
+    image: postgres:16.6
+    environment:
+      POSTGRES_PASSWORD: postgres
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../../scripts/db-bootstrap.sql:/docker-entrypoint-initdb.d/00-bootstrap.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 20
+
+  redis:
+    image: redis:7.4.1
+    ports: ["6379:6379"]
+
+  minio:
+    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [minio:/data]
+
+  # Grafana + Prometheus-compatible metrics + Tempo + Loki + OTel Collector in one image (ADR-0014).
+  lgtm:
+    image: grafana/otel-lgtm:0.8.1
+    ports: ["3001:3000", "4317:4317", "4318:4318", "9090:9090"]
+
+  migrate:
+    build: { context: ../../services/control-plane }
+    command: ["alembic", "upgrade", "head"]
+    env_file: ../../.env
+    environment:
+      RE_DATABASE_MIGRATION_URL: postgresql+psycopg://re_owner:re_owner@postgres:5432/reliability
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    build: { context: ../../services/control-plane }
+    command: ["uvicorn", "reliability.main_api:app", "--host", "0.0.0.0", "--port", "8000"]
+    env_file: ../../.env
+    environment: &cp-env
+      RE_DATABASE_URL: postgresql+psycopg://re_app:re_app@postgres:5432/reliability
+      RE_DATABASE_SYSTEM_URL: postgresql+psycopg://re_system:re_system@postgres:5432/reliability
+      RE_REDIS_URL: redis://redis:6379/0
+    ports: ["8000:8000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_started }
+
+  worker:
+    build: { context: ../../services/control-plane }
+    command: ["celery", "-A", "reliability.main_worker:celery_app", "worker", "-Q", "default,agents,github", "-c", "4"]
+    env_file: ../../.env
+    environment: *cp-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  scheduler:
+    build: { context: ../../services/control-plane }
+    command: ["celery", "-A", "reliability.main_worker:celery_app", "beat"]
+    env_file: ../../.env
+    environment: *cp-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  outbox-relay:
+    build: { context: ../../services/control-plane }
+    command: ["reliability", "outbox-relay"]
+    env_file: ../../.env
+    environment: *cp-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  otlp-gateway:
+    build: { context: ../../services/control-plane }
+    command: ["uvicorn", "reliability.otlp_gateway:app", "--host", "0.0.0.0", "--port", "4319"]
+    env_file: ../../.env
+    environment:
+      <<: *cp-env
+      RE_OTEL_COLLECTOR_URL: http://lgtm:4318
+    ports: ["4319:4319"]
+
+  web:
+    build: { context: ../.., dockerfile: apps/web/Dockerfile }
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+      NEXT_PUBLIC_AUTH_MODE: dev
+    ports: ["3000:3000"]
+
+volumes:
+  pgdata:
+  minio:

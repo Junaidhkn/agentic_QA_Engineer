@@ -1,0 +1,34 @@
+[importlinter]
+root_package = reliability
+
+[importlinter:contract:platform-is-a-leaf]
+name = platform must not depend on modules, agents or llm
+type = forbidden
+source_modules =
+    reliability.platform
+forbidden_modules =
+    reliability.modules
+    reliability.agents
+    reliability.llm
+
+[importlinter:contract:agents-cannot-reach-privileged-modules]
+name = agents cannot import verification, approvals, admission or GitHub write paths (ADR-0007)
+type = forbidden
+source_modules =
+    reliability.agents
+forbidden_modules =
+    reliability.modules.verification
+    reliability.modules.approvals
+    reliability.modules.admission
+    reliability.modules.integrations.github
+    reliability.modules.quotas
+    reliability.modules.secrets
+
+[importlinter:contract:llm-is-provider-boundary]
+name = llm gateway does not depend on domain modules
+type = forbidden
+source_modules =
+    reliability.llm
+forbidden_modules =
+    reliability.modules
+    reliability.agents

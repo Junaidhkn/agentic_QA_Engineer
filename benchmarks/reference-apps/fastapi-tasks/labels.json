@@ -1,0 +1,70 @@
+{
+  "app": "fastapi-tasks",
+  "framework": "fastapi",
+  "routes": [
+    "GET /health",
+    "GET /api/projects",
+    "GET /api/projects/{project_id}/tasks",
+    "GET /api/tasks",
+    "POST /api/tasks",
+    "GET /api/tasks/{task_id}",
+    "POST /api/tasks/{task_id}/comments",
+    "PATCH /api/tasks/{task_id}/done"
+  ],
+  "pages": [],
+  "critical_workflows": [],
+  "sandbox": {
+    "services": [
+      "postgres"
+    ],
+    "migrate": true,
+    "seed": true
+  },
+  "run": {
+    "cmd": [
+      "{python}",
+      "-m",
+      "uvicorn",
+      "app.main:app",
+      "--port",
+      "{port}",
+      "--log-level",
+      "warning"
+    ],
+    "health": "/health",
+    "requires_database": true
+  },
+  "defects": {
+    "missing_index": {
+      "finding": "slo_breach",
+      "files": [
+        "app/routes.py",
+        "alembic/versions/0002_assignee_index.py",
+        "app/db.py"
+      ],
+      "mechanism": "sequential scan on tasks.assignee_email",
+      "category": "missing_index",
+      "targets": [
+        "tasks.assignee_email",
+        "assignee_email"
+      ]
+    },
+    "n_plus_one": {
+      "finding": "regression",
+      "files": [
+        "app/routes.py"
+      ],
+      "mechanism": "one comment-count query per task",
+      "category": "n_plus_one"
+    },
+    "pool_exhaustion": {
+      "finding": "saturation",
+      "files": [
+        "app/db.py",
+        "app/routes.py"
+      ],
+      "mechanism": "connection held across slow call with pool_size=2",
+      "category": "pool_exhaustion"
+    }
+  }
+}

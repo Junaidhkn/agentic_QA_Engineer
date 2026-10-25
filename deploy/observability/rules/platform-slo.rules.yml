@@ -1,0 +1,204 @@
+# Platform SLOs and alerts (operations.md §6). Loaded into the Mimir ruler for tenant
+# `platform`; Alertmanager routes `severity: page` to on-call (PagerDuty) and
+# `severity: ticket` to the platform queue. `page_hours: business` pages only 08:00–20:00
+# on-call local time (job-start SLO), otherwise it opens a ticket.
+#
+# Burn-rate alerts follow the multi-window, multi-burn-rate pattern: a fast window
+# catches sharp outages (2 % of a 30-day budget in 1 h = 14.4×), a slow one catches
+# sustained degradation (5 % in 6 h = 6×); each needs its short confirmation window too.
+#
+# Gauges computed from the database (re_queue_*, re_outbox_*, re_platform_check_*,
+# re_integrity_violations) are reported identically by every API task, so rules use max().
+# Tested with `promtool test rules deploy/observability/rules/tests/*.yml`.
+
+groups:
+  - name: re-slo-recording
+    interval: 30s
+    rules:
+      # --- Availability (NFR-3): non-5xx share of API requests -------------------------
+      - record: re:http_errors:ratio_rate5m
+        expr: sum(rate(re_http_requests_total{status="5xx"}[5m])) / clamp_min(sum(rate(re_http_requests_total[5m])), 1e-9)
+      - record: re:http_errors:ratio_rate30m
+        expr: sum(rate(re_http_requests_total{status="5xx"}[30m])) / clamp_min(sum(rate(re_http_requests_total[30m])), 1e-9)
+      - record: re:http_errors:ratio_rate1h
+        expr: sum(rate(re_http_requests_total{status="5xx"}[1h])) / clamp_min(sum(rate(re_http_requests_total[1h])), 1e-9)
+      - record: re:http_errors:ratio_rate6h
+        expr: sum(rate(re_http_requests_total{status="5xx"}[6h])) / clamp_min(sum(rate(re_http_requests_total[6h])), 1e-9)
+
+      # --- Read latency (NFR-5): share of GETs slower than 300 ms -------------------------
+      # Streams (SSE) and runner long-polls are long by design and excluded.
+      - record: re:http_read_slow:ratio_rate30m
+        expr: |
+          1 - (
+            sum(rate(re_http_request_duration_seconds_bucket{method="GET",le="0.3",route!~".*/events|/internal/.*"}[30m]))
+            / clamp_min(sum(rate(re_http_request_duration_seconds_count{method="GET",route!~".*/events|/internal/.*"}[30m])), 1e-9)
+          )
+      - record: re:http_read_slow:ratio_rate6h
+        expr: |
+          1 - (
+            sum(rate(re_http_request_duration_seconds_bucket{method="GET",le="0.3",route!~".*/events|/internal/.*"}[6h]))
+            / clamp_min(sum(rate(re_http_request_duration_seconds_count{method="GET",route!~".*/events|/internal/.*"}[6h])), 1e-9)
+          )
+
+      # --- Job start (NFR-4): share of jobs that took longer than 30 s to start ----------
+      - record: re:job_start_slow:ratio_rate5m
+        expr: 1 - (sum(rate(re_job_start_seconds_bucket{le="30.0"}[5m])) / clamp_min(sum(rate(re_job_start_seconds_count[5m])), 1e-9))
+      - record: re:job_start_slow:ratio_rate30m
+        expr: 1 - (sum(rate(re_job_start_seconds_bucket{le="30.0"}[30m])) / clamp_min(sum(rate(re_job_start_seconds_count[30m])), 1e-9))
+      - record: re:job_start_slow:ratio_rate1h
+        expr: 1 - (sum(rate(re_job_start_seconds_bucket{le="30.0"}[1h])) / clamp_min(sum(rate(re_job_start_seconds_count[1h])), 1e-9))
+      - record: re:job_start_slow:ratio_rate6h
+        expr: 1 - (sum(rate(re_job_start_seconds_bucket{le="30.0"}[6h])) / clamp_min(sum(rate(re_job_start_seconds_count[6h])), 1e-9))
+      - record: re:job_start_seconds:p95_1h
+        expr: histogram_quantile(0.95, sum by (le) (rate(re_job_start_seconds_bucket[1h])))
+
+  - name: re-slo-alerts
+    rules:
+      - alert: PlatformAvailabilityBudgetBurnFast
+        expr: re:http_errors:ratio_rate1h > (14.4 * 0.001) and re:http_errors:ratio_rate5m > (14.4 * 0.001)
+        for: 2m
+        labels: { severity: page, slo: availability }
+        annotations:
+          summary: "API 5xx rate is burning the 99.9% availability budget fast (2% in 1 h)"
+          runbook: docs/runbooks/README.md#triage
+      - alert: PlatformAvailabilityBudgetBurnSlow
+        expr: re:http_errors:ratio_rate6h > (6 * 0.001) and re:http_errors:ratio_rate30m > (6 * 0.001)
+        for: 15m
+        labels: { severity: page, slo: availability }
+        annotations:
+          summary: "API 5xx rate is burning the availability budget (5% in 6 h)"
+          runbook: docs/runbooks/README.md#triage
+      - alert: ApiReadLatencyBudgetBurn
+        expr: re:http_read_slow:ratio_rate6h > (3 * 0.05) and re:http_read_slow:ratio_rate30m > (3 * 0.05)
+        for: 30m
+        labels: { severity: ticket, slo: latency }
+        annotations:
+          summary: "More than 15% of API reads take over 300 ms (p95 objective at 3× burn)"
+      - alert: JobStartBudgetBurnFast
+        expr: re:job_start_slow:ratio_rate1h > (14.4 * 0.05) and re:job_start_slow:ratio_rate5m > (14.4 * 0.05)
+        for: 2m
+        labels: { severity: page, slo: job_start, page_hours: business }
+        annotations:
+          summary: "Most jobs take over 30 s to start — execution capacity or dispatch is failing"
+          runbook: docs/runbooks/runner-fleet-replacement.md
+      - alert: JobStartBudgetBurnSlow
+        expr: re:job_start_slow:ratio_rate6h > (6 * 0.05) and re:job_start_slow:ratio_rate30m > (6 * 0.05)
+        for: 15m
+        labels: { severity: page, slo: job_start, page_hours: business }
+        annotations:
+          summary: "Over 30% of jobs take more than 30 s to start (95% < 30 s objective)"
+      - alert: QueueBacklog
+        expr: max by (queue) (re_queue_oldest_age_seconds) > 60
+        for: 5m
+        labels: { severity: ticket, slo: job_start }
+        annotations:
+          summary: "Oldest queued {{ $labels.queue }} has waited {{ $value | humanizeDuration }}"
+      - alert: KillLatencyBreach
+        expr: sum(increase(re_kill_latency_seconds_count[10m])) - sum(increase(re_kill_latency_seconds_bucket{le="10.0"}[10m])) > 0
+        labels: { severity: page, slo: kill_latency }
+        annotations:
+          summary: "A cancelled job kept running for more than 10 s after its runner got the stop (NFR-7)"
+          runbook: docs/runbooks/kill-switch.md
+
+  - name: re-platform-alerts
+    rules:
+      - alert: OutboxLag
+        expr: max(re_outbox_oldest_age_seconds) > 30
+        for: 2m
+        labels: { severity: page }
+        annotations:
+          summary: "Outbox relay is behind by {{ $value | humanizeDuration }}; new jobs are not starting"
+          runbook: docs/runbooks/README.md#outbox-relay
+      - alert: OutboxDeadLetters
+        expr: max(re_outbox_failed_24h) > 0
+        labels: { severity: ticket }
+        annotations:
+          summary: "{{ $value }} outbox message(s) exhausted their retries in the last 24 h"
+      - alert: MetricsDatabaseUnavailable
+        expr: max(re_metrics_db_up) == 0
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: "The API cannot read Postgres for platform gauges"
+          runbook: docs/runbooks/rds-pitr-restore.md
+      - alert: ApiTargetDown
+        expr: sum(up{job="re-api"}) == 0
+        for: 2m
+        labels: { severity: page }
+        annotations:
+          summary: "No API task is being scraped"
+      - alert: RlsDenial
+        expr: sum(increase(re_rls_denials_total[5m])) > 0
+        labels: { severity: page }
+        annotations:
+          summary: "A query was refused by row-level security — possible cross-tenant access bug"
+          runbook: docs/runbooks/cross-tenant-access-alarm.md
+      - alert: IntegrityViolation
+        expr: max by (invariant) (re_integrity_violations) > 0
+        labels: { severity: page }
+        annotations:
+          summary: "Platform invariant {{ $labels.invariant }} has {{ $value }} violating row(s)"
+          runbook: docs/runbooks/cross-tenant-access-alarm.md
+      - alert: IntegrityCheckStale
+        expr: max(re_platform_check_age_seconds{check="integrity"}) > 3 * 3600
+        labels: { severity: ticket }
+        annotations:
+          summary: "The hourly integrity check has not run for 3 hours"
+      - alert: CanaryFailing
+        expr: max(re_platform_check_consecutive_failures{check="canary"}) >= 2
+        labels: { severity: page }
+        annotations:
+          summary: "Synthetic canary failed {{ $value }} times in a row (admission → runner → findings path)"
+          runbook: docs/runbooks/README.md#canary
+      - alert: CanaryStale
+        expr: time() - max(re_platform_check_last_success_timestamp_seconds{check="canary"}) > 3600
+        labels: { severity: page }
+        annotations:
+          summary: "No successful synthetic canary for over an hour"
+          runbook: docs/runbooks/README.md#canary
+      - alert: CanaryMissing
+        expr: absent(re_platform_check_ok{check="canary"})
+        for: 1h
+        labels: { severity: ticket }
+        annotations:
+          summary: "The synthetic canary has never reported (RE_CANARY_PROJECT_ID/TARGET_ID?)"
+      - alert: RestoreDrillFailed
+        expr: max(re_platform_check_ok{check="restore_drill"}) == 0
+        labels: { severity: page }
+        annotations:
+          summary: "The last restore drill failed — backups may not be restorable"
+          runbook: docs/runbooks/rds-pitr-restore.md
+      - alert: RestoreDrillStale
+        expr: time() - max(re_platform_check_last_success_timestamp_seconds{check="restore_drill"}) > 8 * 86400
+        labels: { severity: page }
+        annotations:
+          summary: "No successful restore drill in 8 days (weekly drill missed)"
+          runbook: docs/runbooks/rds-pitr-restore.md
+      - alert: RunnerLeasesExpiring
+        expr: sum(increase(re_runner_leases_expired_total[15m])) > 3
+        labels: { severity: ticket }
+        annotations:
+          summary: "{{ $value }} runner leases expired in 15 min — hosts are dying or losing the control plane"
+          runbook: docs/runbooks/runner-fleet-replacement.md
+      - alert: LlmProviderDegraded
+        expr: |
+          sum(rate(re_llm_requests_total{outcome="unavailable"}[15m]))
+            / clamp_min(sum(rate(re_llm_requests_total[15m])), 1e-9) > 0.2
+        for: 15m
+        labels: { severity: ticket }
+        annotations:
+          summary: "Over 20% of LLM calls fail; diagnosis and repair are delayed"
+          runbook: docs/runbooks/llm-provider-degradation.md
+      - alert: AbuseReviewWaiting
+        expr: max(re_abuse_review_oldest_open_seconds) > 4 * 3600
+        labels: { severity: ticket }
+        annotations:
+          summary: "An abuse review has waited {{ $value | humanizeDuration }} (target: decided within 4 business hours)"
+          runbook: docs/runbooks/abuse-review-queue.md
+      - alert: KillSwitchActive
+        expr: max(re_kill_switch_active) == 1
+        for: 1m
+        labels: { severity: info }
+        annotations:
+          summary: "Global kill switch is on: no test traffic is running"
+          runbook: docs/runbooks/kill-switch.md
